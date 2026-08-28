@@ -1,0 +1,12 @@
+@* Componente placeholder de la Fase 0. Confirma que la UI compartida referencia
+   correctamente a Application/Domain. Las pantallas reales (ingredientes, recetas,
+   productos, presupuestos) se construyen en Fase 1, fuera de este alcance. *@
+
+<div class="estado-nucleo">
+    <p>Medialuncita — núcleo técnico (Fase 0)</p>
+    <p>Motor de costeo: @(_estado)</p>
+</div>
+
+@code {
+    private readonly string _estado = "disponible vía ICosteoService (Application)";
+}

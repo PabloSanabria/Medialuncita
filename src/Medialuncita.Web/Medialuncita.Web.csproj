@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Medialuncita.Web</RootNamespace>
+    <!--
+      IMPORTANTE (ver README, sección "Riesgo Web/PWA"): este host todavía NO tiene
+      persistencia SQLite funcional en el navegador. Compila y sirve la UI compartida,
+      pero cualquier pantalla que dependa de Infrastructure/SQLite real no va a
+      funcionar hasta resolver esa estrategia (Fase 3 del roadmap).
+    -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Medialuncita.UI\Medialuncita.UI.csproj" />
+    <ProjectReference Include="..\Medialuncita.Application\Medialuncita.Application.csproj" />
+  </ItemGroup>
+
+</Project>
