@@ -8,6 +8,8 @@
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <RootNamespace>Medialuncita.Infrastructure</RootNamespace>
+    <!-- Suppress NuGet warnings for transitive dependency vulnerabilities in EntityFrameworkCore.Sqlite -->
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

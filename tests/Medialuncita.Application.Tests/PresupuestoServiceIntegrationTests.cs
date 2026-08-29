@@ -94,11 +94,15 @@ public class PresupuestoServiceIntegrationTests : IDisposable
         _db.ProductoVariantes.Add(variante);
         await _db.SaveChangesAsync();
 
-        var config = await _db.ConfiguracionGlobal.FirstAsync(); // sembrada por HasData
+        // Se usa el repositorio (no una consulta cruda) porque ya contempla el caso de que
+        // el seed de HasData no se haya aplicado (p. ej. al crear el esquema vía
+        // EnsureCreated en lugar de una migración real): si no encuentra la fila, la crea.
+        var configRepo = new ConfiguracionGlobalRepository(_db);
+        var config = await configRepo.GetAsync();
         config.TarifaManoDeObraPorHora = 1000m;
         config.EstrategiaPrecioDefault = EstrategiaPrecio.Margen;
         config.MargenPorcentualDefault = 0.5m; // 50%
-        await _db.SaveChangesAsync();
+        await configRepo.SaveAsync(config);
 
         var service = ConstruirPresupuestoService();
 

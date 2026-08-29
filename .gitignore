@@ -1,0 +1,45 @@
+# Visual Studio / VS Code
+.vs/
+.vscode/
+.github/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+# Build outputs
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+TestResults/
+*.cache
+
+# NuGet / Package manager
+packages/
+*.nupkg
+*.snupkg
+project.assets.json
+*.nuget.props
+*.nuget.targets
+
+# MAUI / mobile
+*.apk
+*.aab
+*.ipa
+*.app
+*.dSYM/
+*.keystore
+*.pfx
+
+# OS generated files
+Thumbs.db
+Desktop.ini
+
+# JetBrains / Rider
+.idea/
+*.iml

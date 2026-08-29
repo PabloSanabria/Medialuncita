@@ -41,11 +41,8 @@ public class ConfiguracionGlobalRepository(MedialuncitaDbContext db) : IConfigur
 
 public class PresupuestoRepository(MedialuncitaDbContext db) : IPresupuestoRepository
 {
-    public async Task<int> AddAsync(Presupuesto presupuesto, CancellationToken ct = default)
-    {
-        var entry = await db.Presupuestos.AddAsync(presupuesto, ct);
-        return entry.Entity.Id;
-    }
+    public async Task AddAsync(Presupuesto presupuesto, CancellationToken ct = default) =>
+        await db.Presupuestos.AddAsync(presupuesto, ct);
 
     public Task<Presupuesto?> GetByIdAsync(int id, CancellationToken ct = default) =>
         db.Presupuestos

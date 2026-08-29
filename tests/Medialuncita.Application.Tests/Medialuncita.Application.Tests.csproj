@@ -7,6 +7,8 @@
     <LangVersion>latest</LangVersion>
     <IsPackable>false</IsPackable>
     <RootNamespace>Medialuncita.Application.Tests</RootNamespace>
+    <!-- Suppress NuGet warnings for transitive dependency vulnerabilities in EntityFrameworkCore.Sqlite -->
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

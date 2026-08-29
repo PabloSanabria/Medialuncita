@@ -65,7 +65,10 @@ public interface IConfiguracionGlobalRepository
 
 public interface IPresupuestoRepository
 {
-    Task<int> AddAsync(Presupuesto presupuesto, CancellationToken ct = default);
+    /// <summary>Agrega el presupuesto al contexto. NO devuelve el Id: recién se asigna
+    /// después de llamar a IUnitOfWork.SaveChangesAsync (autoincremental de SQLite).
+    /// Leer presupuesto.Id después de guardar.</summary>
+    Task AddAsync(Presupuesto presupuesto, CancellationToken ct = default);
     Task<Presupuesto?> GetByIdAsync(int id, CancellationToken ct = default);
     Task<List<Presupuesto>> GetAllAsync(CancellationToken ct = default);
 }

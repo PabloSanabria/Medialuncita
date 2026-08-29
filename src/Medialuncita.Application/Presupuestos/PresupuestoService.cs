@@ -106,9 +106,9 @@ public class PresupuestoService : IPresupuestoService
 
         presupuesto.Total = presupuesto.Items.Sum(i => i.Subtotal);
 
-        var id = await _presupuestos.AddAsync(presupuesto, ct);
-        await _uow.SaveChangesAsync(ct);
-        return id;
+        await _presupuestos.AddAsync(presupuesto, ct);
+        await _uow.SaveChangesAsync(ct); // recién acá SQLite asigna el Id autoincremental
+        return presupuesto.Id;
     }
 
     private static PresupuestoItem ConstruirItemConSnapshot(
