@@ -1,0 +1,106 @@
+@page "/unidades"
+@inject IUnidadMedidaRepository UnidadRepo
+@inject IUnitOfWork UnitOfWork
+
+<h3>Unidades de medida</h3>
+
+<table>
+    <thead>
+        <tr><th>Nombre</th><th>Abrev.</th><th>Tipo</th><th>Factor a unidad base</th></tr>
+    </thead>
+    <tbody>
+        @if (_unidades is null)
+        {
+            <tr><td colspan="4">Cargando...</td></tr>
+        }
+        else if (_unidades.Count == 0)
+        {
+            <tr><td colspan="4">No hay unidades cargadas todavía.</td></tr>
+        }
+        else
+        {
+            @foreach (var u in _unidades)
+            {
+                <tr>
+                    <td>@u.Nombre</td>
+                    <td>@u.Abreviatura</td>
+                    <td>@u.Tipo</td>
+                    <td>@u.FactorAUnidadBase</td>
+                </tr>
+            }
+        }
+    </tbody>
+</table>
+
+<h4>Agregar unidad</h4>
+
+<EditForm Model="_nueva" OnValidSubmit="AgregarAsync">
+    <div>
+        <label>Nombre</label>
+        <InputText @bind-Value="_nueva.Nombre" />
+    </div>
+    <div>
+        <label>Abreviatura</label>
+        <InputText @bind-Value="_nueva.Abreviatura" />
+    </div>
+    <div>
+        <label>Tipo</label>
+        <InputSelect @bind-Value="_nueva.Tipo">
+            @foreach (var tipo in Enum.GetValues<TipoUnidad>())
+            {
+                <option value="@tipo">@tipo</option>
+            }
+        </InputSelect>
+    </div>
+    <div>
+        <label>Factor a unidad base</label>
+        <InputNumber @bind-Value="_nueva.FactorAUnidadBase" />
+    </div>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <p style="color:red">@_error</p>
+    }
+
+    <button type="submit">Guardar</button>
+</EditForm>
+
+@code {
+    private List<UnidadMedida>? _unidades;
+    private UnidadMedida _nueva = new() { Tipo = TipoUnidad.Peso };
+    private string? _error;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync() => _unidades = await UnidadRepo.GetAllAsync();
+
+    private async Task AgregarAsync()
+    {
+        _error = null;
+
+        if (string.IsNullOrWhiteSpace(_nueva.Nombre))
+        {
+            _error = "El nombre es obligatorio.";
+            return;
+        }
+        if (_nueva.FactorAUnidadBase <= 0)
+        {
+            _error = "El factor a unidad base debe ser mayor a cero.";
+            return;
+        }
+
+        try
+        {
+            await UnidadRepo.AddAsync(_nueva);
+            await UnitOfWork.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"No se pudo guardar (¿nombre repetido?): {ex.Message}";
+            return;
+        }
+
+        _nueva = new UnidadMedida { Tipo = TipoUnidad.Peso };
+        await CargarAsync();
+    }
+}

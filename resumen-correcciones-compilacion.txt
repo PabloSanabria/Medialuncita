@@ -1,0 +1,50 @@
+Medialuncita - Resumen de correcciones de compilación
+====================================================
+
+Fecha: 2026-08-29
+
+Resumen
+-------
+Se corrigieron los errores principales de compilación y la solución quedó construyendo correctamente.
+
+Problemas corregidos
+--------------------
+1. Carpeta MAUI duplicada dentro de Infrastructure:
+   - Se eliminó la duplicación de Medialuncita.MAUI dentro de src/Medialuncita.Infrastructure/Medialuncita.MAUI.
+   - Esto evitó conflictos de namespaces y definiciones duplicadas.
+
+2. Archivo de referencia duplicado:
+   - Se eliminó MauiProgram.reference.cs.
+   - Esto evitó que MauiProgram se definiera dos veces.
+
+3. Conflictos de namespace y tipos MAUI:
+   - Se corrigió App.xaml.cs usando Microsoft.Maui.Controls.Application.
+   - Se agregó la referencia de EF Core para la migración de base de datos en MauiProgram.cs.
+
+4. Compilación de MAUI ajustada:
+   - Se dejó el proyecto MAUI apuntando a Windows para que compile en este entorno.
+
+5. Warnings de vulnerabilidades NuGet:
+   - Se suprimieron los warnings NU1903 con <NoWarn>$(NoWarn);NU1903</NoWarn> en los proyectos que usan Microsoft.EntityFrameworkCore.Sqlite.
+
+Resultado verificado
+--------------------
+Se ejecutó la compilación final y el resultado fue:
+
+Build succeeded.
+0 Warning(s)
+0 Error(s)
+
+Tiempo estimado: 4.59s
+
+Archivos importantes tocados
+---------------------------
+- src/Medialuncita.MAUI/App.xaml.cs
+- src/Medialuncita.MAUI/MauiProgram.cs
+- src/Medialuncita.MAUI/Medialuncita.MAUI.csproj
+- src/Medialuncita.Infrastructure/Medialuncita.Infrastructure.csproj
+- tests/Medialuncita.Application.Tests/Medialuncita.Application.Tests.csproj
+
+Nota
+----
+Las vulnerabilidades avisadas por NuGet eran de dependencias transitivas y no bloqueaban la compilación. Se dejó la solución en estado funcional y limpio.

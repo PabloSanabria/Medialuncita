@@ -27,8 +27,6 @@ public static class MauiProgram
         // sin código específico de plataforma.
         var dbPath = Path.Combine(FileSystem.AppDataDirectory, "medialuncita.db");
 
-        System.Diagnostics.Debug.WriteLine($"[MEDIALUNCITA] Ruta de la base: {dbPath}");
-
         builder.Services.AddApplication();
         builder.Services.AddInfrastructure(dbPath);
 

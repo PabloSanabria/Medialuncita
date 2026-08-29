@@ -12,6 +12,9 @@ public class UnidadMedidaRepository(MedialuncitaDbContext db) : IUnidadMedidaRep
 
     public Task<List<UnidadMedida>> GetAllAsync(CancellationToken ct = default) =>
         db.UnidadesMedida.OrderBy(u => u.Nombre).ToListAsync(ct);
+
+    public async Task AddAsync(UnidadMedida unidad, CancellationToken ct = default) =>
+        await db.UnidadesMedida.AddAsync(unidad, ct);
 }
 
 public class IngredienteRepository(MedialuncitaDbContext db) : IIngredienteRepository

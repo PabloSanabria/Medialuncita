@@ -9,6 +9,7 @@ public interface IUnidadMedidaRepository
 {
     Task<UnidadMedida?> GetByIdAsync(int id, CancellationToken ct = default);
     Task<List<UnidadMedida>> GetAllAsync(CancellationToken ct = default);
+    Task AddAsync(UnidadMedida unidad, CancellationToken ct = default);
 }
 
 public interface IIngredienteRepository
