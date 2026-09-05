@@ -3,9 +3,6 @@ using Medialuncita.Domain.Entities;
 
 namespace Medialuncita.Application.Costeo;
 
-/// <summary>Precio vigente de un ingrediente o material, ya resuelto desde el historial.</summary>
-public readonly record struct PrecioVigente(decimal Precio, UnidadMedida Unidad);
-
 /// <summary>
 /// Motor de costeo. 100% determinístico: misma entrada -> misma salida, siempre.
 /// No tiene ninguna dependencia de IA, red, ubicación ni fuentes externas.
@@ -20,14 +17,15 @@ public interface ICosteoService
     /// </summary>
     /// <param name="receta">Receta madre, con Ingredientes y Servicios cargados.</param>
     /// <param name="variante">Variante a costear, con IngredienteOverrides, Materiales y Servicios cargados.</param>
-    /// <param name="precioVigentePorIngredienteId">Precio vigente resuelto para cada IngredienteId usado.</param>
-    /// <param name="precioVigentePorMaterialId">Precio vigente resuelto para cada MaterialId usado.</param>
+    /// <param name="precioVigentePorIngredienteId">Precio vigente de cada IngredienteId usado,
+    /// expresado en la UnidadCompra de ese ingrediente (que ya viene cargada en la entidad).</param>
+    /// <param name="precioVigentePorMaterialId">Ídem para materiales, en su UnidadCompra.</param>
     /// <param name="tarifaManoDeObraPorHora">Tarifa efectiva (override de config global si no hay uno propio).</param>
     ResultadoCosteo CalcularCosto(
         Receta receta,
         ProductoVariante variante,
-        IReadOnlyDictionary<int, PrecioVigente> precioVigentePorIngredienteId,
-        IReadOnlyDictionary<int, PrecioVigente> precioVigentePorMaterialId,
+        IReadOnlyDictionary<int, decimal> precioVigentePorIngredienteId,
+        IReadOnlyDictionary<int, decimal> precioVigentePorMaterialId,
         decimal tarifaManoDeObraPorHora);
 
     /// <summary>Calcula el precio de venta a partir de un costo unitario y una estrategia.</summary>

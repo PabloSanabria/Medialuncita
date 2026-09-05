@@ -25,7 +25,7 @@ public class IngredienteRepository(MedialuncitaDbContext db) : IIngredienteRepos
     public Task<Ingrediente?> GetByIdConHistorialAsync(int id, CancellationToken ct = default) =>
         db.Ingredientes
             .Include(i => i.UnidadCompra)
-            .Include(i => i.HistorialPrecios).ThenInclude(h => h.Unidad)
+            .Include(i => i.HistorialPrecios)
             .FirstOrDefaultAsync(i => i.Id == id, ct);
 
     public Task<List<Ingrediente>> GetAllActivosAsync(CancellationToken ct = default) =>
@@ -42,14 +42,14 @@ public class IngredienteRepository(MedialuncitaDbContext db) : IIngredienteRepos
 
     public Task<HistorialPrecioIngrediente?> GetPrecioVigenteAsync(int ingredienteId, DateTime? aFecha = null, CancellationToken ct = default)
     {
-        var query = db.HistorialPreciosIngredientes.Include(h => h.Unidad).Where(h => h.IngredienteId == ingredienteId);
+        var query = db.HistorialPreciosIngredientes.Where(h => h.IngredienteId == ingredienteId);
         if (aFecha.HasValue) query = query.Where(h => h.Fecha <= aFecha.Value);
         return query.OrderByDescending(h => h.Fecha).ThenByDescending(h => h.Id).FirstOrDefaultAsync(ct);
     }
 
     public Task<List<HistorialPrecioIngrediente>> GetHistorialAsync(int ingredienteId, DateTime? desde = null, DateTime? hasta = null, CancellationToken ct = default)
     {
-        var query = db.HistorialPreciosIngredientes.Include(h => h.Unidad).Where(h => h.IngredienteId == ingredienteId);
+        var query = db.HistorialPreciosIngredientes.Where(h => h.IngredienteId == ingredienteId);
         if (desde.HasValue) query = query.Where(h => h.Fecha >= desde.Value);
         if (hasta.HasValue) query = query.Where(h => h.Fecha <= hasta.Value);
         return query.OrderBy(h => h.Fecha).ToListAsync(ct);
@@ -75,14 +75,14 @@ public class MaterialRepository(MedialuncitaDbContext db) : IMaterialRepository
 
     public Task<HistorialPrecioMaterial?> GetPrecioVigenteAsync(int materialId, DateTime? aFecha = null, CancellationToken ct = default)
     {
-        var query = db.HistorialPreciosMateriales.Include(h => h.Unidad).Where(h => h.MaterialId == materialId);
+        var query = db.HistorialPreciosMateriales.Where(h => h.MaterialId == materialId);
         if (aFecha.HasValue) query = query.Where(h => h.Fecha <= aFecha.Value);
         return query.OrderByDescending(h => h.Fecha).ThenByDescending(h => h.Id).FirstOrDefaultAsync(ct);
     }
 
     public Task<List<HistorialPrecioMaterial>> GetHistorialAsync(int materialId, DateTime? desde = null, DateTime? hasta = null, CancellationToken ct = default)
     {
-        var query = db.HistorialPreciosMateriales.Include(h => h.Unidad).Where(h => h.MaterialId == materialId);
+        var query = db.HistorialPreciosMateriales.Where(h => h.MaterialId == materialId);
         if (desde.HasValue) query = query.Where(h => h.Fecha >= desde.Value);
         if (hasta.HasValue) query = query.Where(h => h.Fecha <= hasta.Value);
         return query.OrderBy(h => h.Fecha).ToListAsync(ct);

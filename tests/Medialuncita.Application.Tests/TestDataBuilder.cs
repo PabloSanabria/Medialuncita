@@ -1,4 +1,3 @@
-using Medialuncita.Application.Costeo;
 using Medialuncita.Domain.Entities;
 using Medialuncita.Domain.Enums;
 
@@ -18,6 +17,7 @@ internal static class TestDataBuilder
     public static UnidadMedida Taza => new() { Id = 5, Nombre = "Taza", Abreviatura = "taza", Tipo = TipoUnidad.Volumen, FactorAUnidadBase = 250 };
     public static UnidadMedida Unidad => new() { Id = 6, Nombre = "Unidad", Abreviatura = "u", Tipo = TipoUnidad.Unidad, FactorAUnidadBase = 1 };
     public static UnidadMedida Porcion => new() { Id = 7, Nombre = "Porción", Abreviatura = "porción", Tipo = TipoUnidad.Unidad, FactorAUnidadBase = 1 };
+    public static UnidadMedida Docena => new() { Id = 8, Nombre = "Docena", Abreviatura = "docena", Tipo = TipoUnidad.Unidad, FactorAUnidadBase = 12 };
 
     public static Ingrediente Harina() => new()
     {
@@ -122,14 +122,15 @@ internal static class TestDataBuilder
         };
     }
 
-    public static IReadOnlyDictionary<int, PrecioVigente> PreciosIngredientesDefault() => new Dictionary<int, PrecioVigente>
+    /// <summary>Precio vigente por ingrediente, expresado en su UnidadCompra (ya no lleva unidad propia).</summary>
+    public static IReadOnlyDictionary<int, decimal> PreciosIngredientesDefault() => new Dictionary<int, decimal>
     {
-        [Harina().Id] = new PrecioVigente(1500m, Kilogramo), // $1500 / kg
-        [DulceDeLeche().Id] = new PrecioVigente(3000m, Kilogramo) // $3000 / kg
+        [Harina().Id] = 1500m, // $1500 / kg
+        [DulceDeLeche().Id] = 3000m // $3000 / kg
     };
 
-    public static IReadOnlyDictionary<int, PrecioVigente> PreciosMaterialesDefault() => new Dictionary<int, PrecioVigente>
+    public static IReadOnlyDictionary<int, decimal> PreciosMaterialesDefault() => new Dictionary<int, decimal>
     {
-        [CajaIndividual().Id] = new PrecioVigente(200m, Unidad) // $200 / unidad
+        [CajaIndividual().Id] = 200m // $200 / unidad
     };
 }

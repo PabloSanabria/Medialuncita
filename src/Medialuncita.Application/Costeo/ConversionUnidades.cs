@@ -6,6 +6,26 @@ namespace Medialuncita.Application.Costeo;
 public static class ConversionUnidades
 {
     /// <summary>
+    /// Indica si es posible convertir una cantidad expresada en <paramref name="desde"/>
+    /// hacia el tipo <paramref name="tipoDestino"/>, SIN hacer la conversión. Pensado para
+    /// validar en el momento de carga (ej. al armar una receta) si la unidad elegida es
+    /// compatible con la unidad de compra del ingrediente, antes de intentar costear.
+    /// Misma regla que usa ConvertirAUnidadBase: mismo tipo siempre es válido; cruce
+    /// Peso&lt;-&gt;Volumen solo es válido si hay densidad definida; cualquier otra combinación
+    /// (por ejemplo, contra Unidad) nunca es válida.
+    /// </summary>
+    public static bool EsConversionValida(UnidadMedida desde, TipoUnidad tipoDestino, decimal? densidadGramosPorMililitro = null)
+    {
+        if (desde.Tipo == tipoDestino) return true;
+
+        var esCrucePesoVolumen =
+            (desde.Tipo == TipoUnidad.Peso && tipoDestino == TipoUnidad.Volumen) ||
+            (desde.Tipo == TipoUnidad.Volumen && tipoDestino == TipoUnidad.Peso);
+
+        return esCrucePesoVolumen && densidadGramosPorMililitro is > 0;
+    }
+
+    /// <summary>
     /// Convierte una cantidad expresada en <paramref name="desde"/> a la unidad base
     /// del tipo de <paramref name="hacia"/> (gramos, mililitros o unidades).
     /// Si ambas unidades son del mismo Tipo, es una conversión directa por factor.

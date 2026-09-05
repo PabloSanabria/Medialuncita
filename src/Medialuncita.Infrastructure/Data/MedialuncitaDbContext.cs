@@ -62,7 +62,6 @@ public class MedialuncitaDbContext : DbContext
         modelBuilder.Entity<HistorialPrecioIngrediente>(e =>
         {
             e.HasOne(h => h.Ingrediente).WithMany(i => i.HistorialPrecios).HasForeignKey(h => h.IngredienteId).OnDelete(DeleteBehavior.Cascade);
-            e.HasOne(h => h.Unidad).WithMany().HasForeignKey(h => h.UnidadId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(h => new { h.IngredienteId, h.Fecha }); // resolución rápida de "precio vigente"
         });
 
@@ -74,7 +73,6 @@ public class MedialuncitaDbContext : DbContext
         modelBuilder.Entity<HistorialPrecioMaterial>(e =>
         {
             e.HasOne(h => h.Material).WithMany(m => m.HistorialPrecios).HasForeignKey(h => h.MaterialId).OnDelete(DeleteBehavior.Cascade);
-            e.HasOne(h => h.Unidad).WithMany().HasForeignKey(h => h.UnidadId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(h => new { h.MaterialId, h.Fecha });
         });
 
@@ -140,8 +138,7 @@ public class MedialuncitaDbContext : DbContext
             e.HasMany(i => i.DetalleServicios).WithOne(d => d.PresupuestoItem!).HasForeignKey(d => d.PresupuestoItemId).OnDelete(DeleteBehavior.Cascade);
         });
 
-        // Seed de unidades básicas + configuración global por defecto (fila única Id=1).
-        // Facilita arrancar a probar sin tener que cargar catálogos a mano.
+        // Seed de configuración global por defecto (fila única Id=1).
         modelBuilder.Entity<ConfiguracionGlobal>().HasData(new ConfiguracionGlobal
         {
             Id = 1,

@@ -1,8 +1,8 @@
 namespace Medialuncita.Domain.Entities;
 
 /// <summary>
-/// Registro histórico de precio de un material de packaging. Mismo mecanismo
-/// que HistorialPrecioIngrediente (ver esa clase para la justificación de diseño).
+/// Registro histórico de precio de un material de packaging. Mismo mecanismo y misma
+/// justificación de diseño que HistorialPrecioIngrediente (ver esa clase).
 /// </summary>
 public class HistorialPrecioMaterial
 {
@@ -12,10 +12,7 @@ public class HistorialPrecioMaterial
     public Material? Material { get; set; }
 
     public DateTime Fecha { get; set; }
+
+    /// <summary>Precio expresado en la UnidadCompra del material.</summary>
     public decimal Precio { get; set; }
-
-    public int UnidadId { get; set; }
-    public UnidadMedida? Unidad { get; set; }
-
-    public string Fuente { get; set; } = "Manual";
 }

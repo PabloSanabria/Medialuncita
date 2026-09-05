@@ -1,0 +1,65 @@
+@page "/recetas/{Id:int}"
+@using System.Linq
+@inject IRecetaRepository RecetaRepo
+
+<h3>Detalle de receta</h3>
+
+@if (_receta is null)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <h4>@_receta.Nombre</h4>
+
+    @if (!string.IsNullOrWhiteSpace(_receta.Descripcion))
+    {
+        <p>@_receta.Descripcion</p>
+    }
+
+    <p><strong>Rendimiento: </strong>@_receta.RendimientoBaseCantidad @_receta.RendimientoBaseUnidad?.Abreviatura</p>
+    <p><strong>Tiempo de preparación: </strong>@_receta.TiempoPreparacionBaseMinutos minutos</p>
+
+    <h5>Ingredientes</h5>
+
+    <table>
+        <thead>
+            <tr><th>Ingrediente</th><th>Cantidad</th><th>Unidad</th><th>Merma aplicada</th></tr>
+        </thead>
+        <tbody>
+            @if (_receta.Ingredientes.Count == 0)
+            {
+                <tr><td colspan="4">Sin ingredientes cargados.</td></tr>
+            }
+            else
+            {
+                @foreach (var ri in _receta.Ingredientes)
+                {
+                    var merma = ri.MermaOverride ?? ri.Ingrediente?.MermaDefault ?? 0m;
+                    <tr>
+                        <td>@ri.Ingrediente?.Nombre</td>
+                        <td>@ri.Cantidad</td>
+                        <td>@ri.Unidad?.Abreviatura</td>
+                        <td>
+                            @((merma * 100).ToString("0.##"))%
+                            @(ri.MermaOverride is null ? " (default del ingrediente)" : " (override de esta receta)")
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+}
+
+<p><a href="/recetas">Volver a recetas</a></p>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Receta? _receta;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _receta = await RecetaRepo.GetByIdConIngredientesAsync(Id);
+    }
+}

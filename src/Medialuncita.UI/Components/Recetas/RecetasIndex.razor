@@ -1,0 +1,322 @@
+@page "/recetas"
+@using System.Linq
+@inject IRecetaRepository RecetaRepo
+@inject IIngredienteRepository IngredienteRepo
+@inject IUnidadMedidaRepository UnidadRepo
+@inject IUnitOfWork UnitOfWork
+
+<h3>Recetas</h3>
+
+<table>
+    <thead>
+        <tr><th>Nombre</th><th>Rendimiento</th><th>Tiempo prep.</th><th>Ingredientes</th><th></th></tr>
+    </thead>
+    <tbody>
+        @if (_recetas is null)
+        {
+            <tr><td colspan="5">Cargando...</td></tr>
+        }
+        else if (_recetas.Count == 0)
+        {
+            <tr><td colspan="5">No hay recetas cargadas todavía.</td></tr>
+        }
+        else
+        {
+            @foreach (var r in _recetas)
+            {
+                <tr>
+                    <td>@r.Nombre</td>
+                    <td>@r.RendimientoBaseCantidad @r.RendimientoBaseUnidad?.Abreviatura</td>
+                    <td>@r.TiempoPreparacionBaseMinutos min</td>
+                    <td>@r.Ingredientes.Count</td>
+                    <td><a href="@($"recetas/{r.Id}")">Ver detalle</a></td>
+                </tr>
+            }
+        }
+    </tbody>
+</table>
+
+<h4>Agregar receta</h4>
+
+@if (_ingredientesDisponibles is null || _unidades is null)
+{
+    <p>Cargando catálogos...</p>
+}
+else if (_ingredientesDisponibles.Count == 0)
+{
+    <p><em>Todavía no hay ingredientes cargados. Cargá al menos uno en la sección "Ingredientes" antes de crear una receta.</em></p>
+}
+else
+{
+    <div>
+        <label>Nombre</label>
+        <InputText @bind-Value="_nombre" />
+    </div>
+    <div>
+        <label>Descripción (opcional)</label>
+        <InputText @bind-Value="_descripcion" />
+    </div>
+    <div>
+        <label>Rendimiento — cantidad</label>
+        <InputNumber @bind-Value="_rendimientoCantidad" />
+    </div>
+    <div>
+        <label>Rendimiento — unidad</label>
+        <InputSelect @bind-Value="_rendimientoUnidadId">
+            <option value="0">-- Seleccionar --</option>
+            @foreach (var u in _unidades)
+            {
+                <option value="@u.Id">@u.Nombre (@u.Abreviatura)</option>
+            }
+        </InputSelect>
+    </div>
+    <div>
+        <label>Tiempo de preparación (minutos)</label>
+        <InputNumber @bind-Value="_tiempoPreparacionMinutos" />
+    </div>
+
+    <h5>Ingredientes de la receta</h5>
+
+    <table>
+        <thead>
+            <tr><th>Ingrediente</th><th>Cantidad</th><th>Unidad</th><th>Merma override</th><th></th></tr>
+        </thead>
+        <tbody>
+            @if (_lineas.Count == 0)
+            {
+                <tr><td colspan="5"><em>Todavía no agregaste ningún ingrediente.</em></td></tr>
+            }
+            else
+            {
+                @for (var i = 0; i < _lineas.Count; i++)
+                {
+                    var linea = _lineas[i];
+                    var ingrediente = _ingredientesDisponibles.First(x => x.Id == linea.IngredienteId);
+                    var unidad = _unidades.First(x => x.Id == linea.UnidadId);
+                    <tr>
+                        <td>@ingrediente.Nombre</td>
+                        <td>@linea.Cantidad</td>
+                        <td>@unidad.Abreviatura</td>
+                        <td>@(linea.MermaOverridePorcentaje is null ? $"(default: {ingrediente.MermaDefault * 100:0.##}%)" : $"{linea.MermaOverridePorcentaje}%")</td>
+                        <td><button type="button" @onclick="() => QuitarLinea(linea)">Quitar</button></td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+
+    <div>
+        <label>Ingrediente</label>
+        <InputSelect @bind-Value="_lineaIngredienteId">
+            <option value="0">-- Seleccionar --</option>
+            @foreach (var ing in _ingredientesDisponibles)
+            {
+                <option value="@ing.Id">@ing.Nombre (compra por @ing.UnidadCompra?.Abreviatura)</option>
+            }
+        </InputSelect>
+    </div>
+    <div>
+        <label>Cantidad</label>
+        <InputNumber @bind-Value="_lineaCantidad" />
+    </div>
+    <div>
+        <label>Unidad utilizada en la receta</label>
+        <InputSelect @bind-Value="_lineaUnidadId">
+            <option value="0">-- Seleccionar --</option>
+            @foreach (var u in _unidades)
+            {
+                <option value="@u.Id">@u.Nombre (@u.Abreviatura)</option>
+            }
+        </InputSelect>
+    </div>
+    <div>
+        <label>Merma override % (opcional, dejar vacío para usar la del ingrediente)</label>
+        <InputNumber @bind-Value="_lineaMermaOverridePorcentaje" />
+    </div>
+
+    @if (!string.IsNullOrEmpty(_errorLinea))
+    {
+        <p style="color:red">@_errorLinea</p>
+    }
+
+    <button type="button" @onclick="AgregarLinea">Agregar ingrediente a la receta</button>
+
+    <hr />
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <p style="color:red">@_error</p>
+    }
+
+    <button type="button" @onclick="GuardarRecetaAsync">Guardar receta</button>
+}
+
+@code {
+    private List<Receta>? _recetas;
+    private List<Ingrediente>? _ingredientesDisponibles;
+    private List<UnidadMedida>? _unidades;
+
+    // Datos de la receta en construcción
+    private string _nombre = string.Empty;
+    private string? _descripcion;
+    private decimal _rendimientoCantidad;
+    private int _rendimientoUnidadId;
+    private int _tiempoPreparacionMinutos;
+    private readonly List<LineaIngredienteForm> _lineas = new();
+    private string? _error;
+
+    // Datos de la línea que se está por agregar
+    private int _lineaIngredienteId;
+    private decimal _lineaCantidad;
+    private int _lineaUnidadId;
+    private decimal? _lineaMermaOverridePorcentaje;
+    private string? _errorLinea;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _ingredientesDisponibles = await IngredienteRepo.GetAllActivosAsync();
+        _unidades = await UnidadRepo.GetAllAsync();
+        await CargarRecetasAsync();
+    }
+
+    private async Task CargarRecetasAsync() => _recetas = await RecetaRepo.GetAllActivasAsync();
+
+    private void AgregarLinea()
+    {
+        _errorLinea = null;
+
+        if (_lineaIngredienteId <= 0)
+        {
+            _errorLinea = "Elegí un ingrediente.";
+            return;
+        }
+        if (_lineaCantidad <= 0)
+        {
+            _errorLinea = "La cantidad debe ser mayor a cero.";
+            return;
+        }
+        if (_lineaUnidadId <= 0)
+        {
+            _errorLinea = "Elegí la unidad utilizada en la receta.";
+            return;
+        }
+        if (_lineaMermaOverridePorcentaje is < 0 or >= 100)
+        {
+            _errorLinea = "La merma override debe estar entre 0 y menos de 100.";
+            return;
+        }
+
+        var ingrediente = _ingredientesDisponibles!.First(i => i.Id == _lineaIngredienteId);
+        var unidadElegida = _unidades!.First(u => u.Id == _lineaUnidadId);
+
+        if (ingrediente.UnidadCompra is null)
+        {
+            _errorLinea = $"'{ingrediente.Nombre}' no tiene unidad de compra cargada.";
+            return;
+        }
+
+        // Validación central pedida: la unidad de la receta tiene que ser compatible con
+        // la unidad de compra del ingrediente (mismo tipo), salvo que haya una conversión
+        // válida definida (cruce Peso<->Volumen con densidad cargada en el ingrediente).
+        if (!ConversionUnidades.EsConversionValida(unidadElegida, ingrediente.UnidadCompra.Tipo, ingrediente.DensidadGramosPorMililitro))
+        {
+            _errorLinea = $"La unidad '{unidadElegida.Nombre}' ({unidadElegida.Tipo}) no es compatible con la unidad de " +
+                          $"compra '{ingrediente.UnidadCompra.Nombre}' ({ingrediente.UnidadCompra.Tipo}) de '{ingrediente.Nombre}'. " +
+                          "Elegí una unidad del mismo tipo, o cargá la densidad (g/ml) del ingrediente si necesitás cruzar peso con volumen.";
+            return;
+        }
+
+        if (_lineas.Any(l => l.IngredienteId == _lineaIngredienteId))
+        {
+            _errorLinea = $"'{ingrediente.Nombre}' ya está agregado a esta receta.";
+            return;
+        }
+
+        _lineas.Add(new LineaIngredienteForm
+        {
+            IngredienteId = _lineaIngredienteId,
+            Cantidad = _lineaCantidad,
+            UnidadId = _lineaUnidadId,
+            MermaOverridePorcentaje = _lineaMermaOverridePorcentaje
+        });
+
+        _lineaIngredienteId = 0;
+        _lineaCantidad = 0;
+        _lineaUnidadId = 0;
+        _lineaMermaOverridePorcentaje = null;
+    }
+
+    private void QuitarLinea(LineaIngredienteForm linea) => _lineas.Remove(linea);
+
+    private async Task GuardarRecetaAsync()
+    {
+        _error = null;
+
+        if (string.IsNullOrWhiteSpace(_nombre))
+        {
+            _error = "El nombre es obligatorio.";
+            return;
+        }
+        if (_rendimientoCantidad <= 0)
+        {
+            _error = "El rendimiento debe ser mayor a cero.";
+            return;
+        }
+        if (_rendimientoUnidadId <= 0)
+        {
+            _error = "Elegí la unidad de rendimiento.";
+            return;
+        }
+        if (_tiempoPreparacionMinutos < 0)
+        {
+            _error = "El tiempo de preparación no puede ser negativo.";
+            return;
+        }
+        if (_lineas.Count == 0)
+        {
+            _error = "Agregá al menos un ingrediente antes de guardar.";
+            return;
+        }
+
+        var receta = new Receta
+        {
+            Nombre = _nombre,
+            Descripcion = _descripcion,
+            RendimientoBaseCantidad = _rendimientoCantidad,
+            RendimientoBaseUnidadId = _rendimientoUnidadId,
+            TiempoPreparacionBaseMinutos = _tiempoPreparacionMinutos
+        };
+
+        foreach (var linea in _lineas)
+        {
+            receta.Ingredientes.Add(new RecetaIngrediente
+            {
+                IngredienteId = linea.IngredienteId,
+                Cantidad = linea.Cantidad,
+                UnidadId = linea.UnidadId,
+                MermaOverride = linea.MermaOverridePorcentaje.HasValue ? linea.MermaOverridePorcentaje.Value / 100m : null
+            });
+        }
+
+        await RecetaRepo.AddAsync(receta);
+        await UnitOfWork.SaveChangesAsync();
+
+        // Reset del formulario completo
+        _nombre = string.Empty;
+        _descripcion = null;
+        _rendimientoCantidad = 0;
+        _rendimientoUnidadId = 0;
+        _tiempoPreparacionMinutos = 0;
+        _lineas.Clear();
+
+        await CargarRecetasAsync();
+    }
+
+    private class LineaIngredienteForm
+    {
+        public int IngredienteId { get; set; }
+        public decimal Cantidad { get; set; }
+        public int UnidadId { get; set; }
+        public decimal? MermaOverridePorcentaje { get; set; }
+    }
+}

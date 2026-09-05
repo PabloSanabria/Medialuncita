@@ -57,4 +57,54 @@ public class ConversionUnidadesTests
         var resultado = ConversionUnidades.PrecioPorUnidadBase(1500m, TestDataBuilder.Kilogramo);
         resultado.Should().Be(1.5m); // $1500/kg -> $1.5/g
     }
+
+    // ---- Tests de EsConversionValida (usados por la pantalla de Recetas para validar
+    // la unidad elegida contra la unidad de compra del ingrediente, antes de guardar) ----
+
+    [Fact]
+    public void EsConversionValida_MismoTipo_EsValida()
+    {
+        // Harina comprada en kg, receta la usa en gramos -> mismo tipo (Peso), siempre válido.
+        var resultado = ConversionUnidades.EsConversionValida(TestDataBuilder.Gramo, TipoUnidad.Peso);
+        resultado.Should().BeTrue();
+    }
+
+    [Fact]
+    public void EsConversionValida_Docena_ContraUnidad_EsValida()
+    {
+        // Huevos comprados por docena, receta los usa en unidades -> mismo tipo (Unidad).
+        var resultado = ConversionUnidades.EsConversionValida(TestDataBuilder.Unidad, TipoUnidad.Unidad);
+        resultado.Should().BeTrue();
+    }
+
+    [Fact]
+    public void EsConversionValida_Litro_ContraMililitro_EsValida()
+    {
+        // Leche comprada por litro, receta la usa en mililitros -> mismo tipo (Volumen).
+        var resultado = ConversionUnidades.EsConversionValida(TestDataBuilder.Mililitro, TipoUnidad.Volumen);
+        resultado.Should().BeTrue();
+    }
+
+    [Fact]
+    public void EsConversionValida_PesoAVolumen_ConDensidad_EsValida()
+    {
+        var resultado = ConversionUnidades.EsConversionValida(TestDataBuilder.Gramo, TipoUnidad.Volumen, densidadGramosPorMililitro: 0.53m);
+        resultado.Should().BeTrue();
+    }
+
+    [Fact]
+    public void EsConversionValida_PesoAVolumen_SinDensidad_NoEsValida()
+    {
+        var resultado = ConversionUnidades.EsConversionValida(TestDataBuilder.Gramo, TipoUnidad.Volumen);
+        resultado.Should().BeFalse();
+    }
+
+    [Fact]
+    public void EsConversionValida_ContraUnidadContable_NuncaEsValida_AunqueHayaDensidad()
+    {
+        // Un ingrediente comprado por "Unidad" (ej: docena) no admite cruzarse con Peso/Volumen,
+        // ni siquiera si el ingrediente tuviera densidad cargada.
+        var resultado = ConversionUnidades.EsConversionValida(TestDataBuilder.Kilogramo, TipoUnidad.Unidad, densidadGramosPorMililitro: 1m);
+        resultado.Should().BeFalse();
+    }
 }

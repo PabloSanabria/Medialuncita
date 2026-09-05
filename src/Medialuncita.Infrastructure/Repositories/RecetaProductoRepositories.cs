@@ -16,7 +16,12 @@ public class RecetaRepository(MedialuncitaDbContext db) : IRecetaRepository
             .FirstOrDefaultAsync(r => r.Id == id, ct);
 
     public Task<List<Receta>> GetAllActivasAsync(CancellationToken ct = default) =>
-        db.Recetas.Where(r => r.Activa).OrderBy(r => r.Nombre).ToListAsync(ct);
+        db.Recetas
+            .Include(r => r.RendimientoBaseUnidad)
+            .Include(r => r.Ingredientes)
+            .Where(r => r.Activa)
+            .OrderBy(r => r.Nombre)
+            .ToListAsync(ct);
 
     public async Task AddAsync(Receta receta, CancellationToken ct = default) =>
         await db.Recetas.AddAsync(receta, ct);

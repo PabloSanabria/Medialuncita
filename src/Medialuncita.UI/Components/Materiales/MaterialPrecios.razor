@@ -1,0 +1,109 @@
+@page "/materiales/{Id:int}/precios"
+@using System.Linq
+@inject IMaterialRepository MaterialRepo
+@inject IPrecioConsultaService PrecioService
+
+<h3>Historial de precios</h3>
+
+@if (_material is null)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <h4>@_material.Nombre (@_material.UnidadCompra?.Abreviatura)</h4>
+
+    <p>
+        <strong>Precio vigente: </strong>
+        @(_precioVigente is null ? "Sin precio cargado" : $"${_precioVigente:0.##} / {_material.UnidadCompra?.Abreviatura}")
+    </p>
+
+    <table>
+        <thead><tr><th>Fecha</th><th>Precio</th></tr></thead>
+        <tbody>
+            @if (_historial is null || _historial.Count == 0)
+            {
+                <tr><td colspan="2">Sin registros todavía.</td></tr>
+            }
+            else
+            {
+                @foreach (var h in _historial.OrderByDescending(x => x.Fecha))
+                {
+                    <tr>
+                        <td>@h.Fecha.ToShortDateString()</td>
+                        <td>$@h.Precio.ToString("0.##")</td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+
+    <h4>Cargar precio nuevo</h4>
+
+    <EditForm Model="this" OnValidSubmit="GuardarAsync">
+        <div>
+            <label>Fecha</label>
+            <InputDate @bind-Value="_fecha" />
+        </div>
+        <div>
+            <label>Precio (por @_material.UnidadCompra?.Abreviatura)</label>
+            <InputNumber @bind-Value="_precio" />
+        </div>
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <p style="color:red">@_error</p>
+        }
+
+        <button type="submit">Guardar</button>
+    </EditForm>
+}
+
+<p><a href="/materiales">Volver a materiales</a></p>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Material? _material;
+    private List<HistorialPrecioMaterial>? _historial;
+    private decimal? _precioVigente;
+    private DateTime _fecha = DateTime.Today;
+    private decimal _precio;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        _material = await MaterialRepo.GetByIdAsync(Id);
+        if (_material is null) return;
+
+        _historial = await PrecioService.GetHistorialMaterialAsync(Id);
+
+        try
+        {
+            _precioVigente = await PrecioService.GetPrecioVigenteMaterialAsync(Id);
+        }
+        catch (InvalidOperationException)
+        {
+            _precioVigente = null;
+        }
+    }
+
+    private async Task GuardarAsync()
+    {
+        _error = null;
+
+        if (_precio <= 0)
+        {
+            _error = "El precio debe ser mayor a cero.";
+            return;
+        }
+
+        await PrecioService.RegistrarPrecioMaterialAsync(Id, _precio, _fecha);
+
+        _precio = 0;
+        _fecha = DateTime.Today;
+        await CargarAsync();
+    }
+}

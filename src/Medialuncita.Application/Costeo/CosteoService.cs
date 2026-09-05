@@ -9,8 +9,8 @@ public class CosteoService : ICosteoService
     public ResultadoCosteo CalcularCosto(
         Receta receta,
         ProductoVariante variante,
-        IReadOnlyDictionary<int, PrecioVigente> precioVigentePorIngredienteId,
-        IReadOnlyDictionary<int, PrecioVigente> precioVigentePorMaterialId,
+        IReadOnlyDictionary<int, decimal> precioVigentePorIngredienteId,
+        IReadOnlyDictionary<int, decimal> precioVigentePorMaterialId,
         decimal tarifaManoDeObraPorHora)
     {
         ArgumentNullException.ThrowIfNull(receta);
@@ -68,7 +68,7 @@ public class CosteoService : ICosteoService
         Receta receta,
         ProductoVariante variante,
         decimal factorEscala,
-        IReadOnlyDictionary<int, PrecioVigente> precios)
+        IReadOnlyDictionary<int, decimal> precios)
     {
         var overridesPorIngrediente = variante.IngredienteOverrides
             .ToDictionary(o => o.IngredienteId);
@@ -84,8 +84,15 @@ public class CosteoService : ICosteoService
                     $"RecetaIngrediente {recetaIngrediente.Id} no tiene Ingrediente/Unidad cargados.");
             }
 
+            var ingrediente = recetaIngrediente.Ingrediente;
+            if (ingrediente.UnidadCompra is null)
+            {
+                throw new InvalidOperationException(
+                    $"El ingrediente '{ingrediente.Nombre}' no tiene UnidadCompra cargada.");
+            }
+
             decimal cantidadRequerida;
-            UnidadMedida unidadRequerida;
+            Domain.Entities.UnidadMedida unidadRequerida;
 
             if (overridesPorIngrediente.TryGetValue(recetaIngrediente.IngredienteId, out var over))
             {
@@ -100,11 +107,11 @@ public class CosteoService : ICosteoService
                 unidadRequerida = recetaIngrediente.Unidad;
             }
 
-            var merma = recetaIngrediente.MermaOverride ?? recetaIngrediente.Ingrediente.MermaDefault;
+            var merma = recetaIngrediente.MermaOverride ?? ingrediente.MermaDefault;
             if (merma is < 0 or >= 1)
             {
                 throw new InvalidOperationException(
-                    $"Merma inválida ({merma}) para el ingrediente '{recetaIngrediente.Ingrediente.Nombre}'. Debe estar en [0, 1).");
+                    $"Merma inválida ({merma}) para el ingrediente '{ingrediente.Nombre}'. Debe estar en [0, 1).");
             }
 
             // Merma matemáticamente correcta: se necesita MÁS cantidad "cruda" para
@@ -114,20 +121,23 @@ public class CosteoService : ICosteoService
             if (!precios.TryGetValue(recetaIngrediente.IngredienteId, out var precioVigente))
             {
                 throw new InvalidOperationException(
-                    $"No hay precio vigente cargado para el ingrediente '{recetaIngrediente.Ingrediente.Nombre}'.");
+                    $"No hay precio vigente cargado para el ingrediente '{ingrediente.Nombre}'.");
             }
 
+            // La unidad de referencia del precio es SIEMPRE la UnidadCompra del ingrediente
+            // (ya no viaja en el historial). Acá es donde se resuelve la conversión entre la
+            // unidad de compra (ej: kg, docena, litro) y la unidad usada en la receta (ej: g, unidad, ml).
             var cantidadEfectivaBase = ConversionUnidades.ConvertirAUnidadBase(
-                cantidadEfectiva, unidadRequerida, precioVigente.Unidad.Tipo,
-                recetaIngrediente.Ingrediente.DensidadGramosPorMililitro);
+                cantidadEfectiva, unidadRequerida, ingrediente.UnidadCompra.Tipo,
+                ingrediente.DensidadGramosPorMililitro);
 
-            var precioPorUnidadBase = ConversionUnidades.PrecioPorUnidadBase(precioVigente.Precio, precioVigente.Unidad);
+            var precioPorUnidadBase = ConversionUnidades.PrecioPorUnidadBase(precioVigente, ingrediente.UnidadCompra);
             var subtotal = cantidadEfectivaBase * precioPorUnidadBase;
 
             costoTotal += subtotal;
 
             detalle.Add(new DetalleIngredienteCosteo(
-                NombreIngrediente: recetaIngrediente.Ingrediente.Nombre,
+                NombreIngrediente: ingrediente.Nombre,
                 CantidadRequerida: cantidadRequerida,
                 UnidadRequerida: unidadRequerida.Abreviatura,
                 MermaAplicada: merma,
@@ -141,7 +151,7 @@ public class CosteoService : ICosteoService
 
     private static (List<DetalleMaterialCosteo>, decimal costoTotal) CalcularMateriales(
         ProductoVariante variante,
-        IReadOnlyDictionary<int, PrecioVigente> precios)
+        IReadOnlyDictionary<int, decimal> precios)
     {
         var detalle = new List<DetalleMaterialCosteo>();
         decimal costoTotal = 0m;
@@ -150,6 +160,8 @@ public class CosteoService : ICosteoService
         {
             if (vm.Material is null)
                 throw new InvalidOperationException($"VarianteMaterial {vm.Id} no tiene Material cargado.");
+            if (vm.Material.UnidadCompra is null)
+                throw new InvalidOperationException($"El material '{vm.Material.Nombre}' no tiene UnidadCompra cargada.");
 
             var merma = vm.Material.MermaDefault;
             if (merma is < 0 or >= 1)
@@ -166,18 +178,13 @@ public class CosteoService : ICosteoService
                     $"No hay precio vigente cargado para el material '{vm.Material.Nombre}'.");
             }
 
-            // Los materiales no tienen densidad: solo se admite conversión dentro del mismo Tipo.
-            if (vm.Material.UnidadCompra is not null && vm.Material.UnidadCompra.Tipo != precioVigente.Unidad.Tipo)
-            {
-                throw new InvalidOperationException(
-                    $"El material '{vm.Material.Nombre}' tiene un precio cargado en una unidad de tipo distinto a su unidad de compra.");
-            }
-
-            var unidadCantidad = vm.Material.UnidadCompra ?? precioVigente.Unidad;
+            // La cantidad de un VarianteMaterial siempre está expresada en la UnidadCompra
+            // del material (no tiene una unidad propia distinta), así que convertir a la
+            // unidad base es directo: no hay riesgo de tipos incompatibles acá.
             var cantidadEfectivaBase = ConversionUnidades.ConvertirAUnidadBase(
-                cantidadEfectiva, unidadCantidad, precioVigente.Unidad.Tipo);
+                cantidadEfectiva, vm.Material.UnidadCompra, vm.Material.UnidadCompra.Tipo);
 
-            var precioPorUnidadBase = ConversionUnidades.PrecioPorUnidadBase(precioVigente.Precio, precioVigente.Unidad);
+            var precioPorUnidadBase = ConversionUnidades.PrecioPorUnidadBase(precioVigente, vm.Material.UnidadCompra);
             var subtotal = cantidadEfectivaBase * precioPorUnidadBase;
 
             costoTotal += subtotal;
@@ -187,7 +194,7 @@ public class CosteoService : ICosteoService
                 CantidadRequerida: vm.Cantidad,
                 MermaAplicada: merma,
                 CantidadEfectivaEnUnidadBase: cantidadEfectivaBase,
-                UnidadBase: precioVigente.Unidad.Abreviatura,
+                UnidadBase: vm.Material.UnidadCompra.Abreviatura,
                 PrecioUnitarioUsado: precioPorUnidadBase,
                 Subtotal: subtotal));
         }

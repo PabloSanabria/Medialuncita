@@ -63,9 +63,7 @@ public class PresupuestoServiceIntegrationTests : IDisposable
         {
             IngredienteId = harina.Id,
             Precio = 1000m, // $1000/kg = $1/g
-            UnidadId = kg.Id,
-            Fecha = new DateTime(2026, 1, 1),
-            Fuente = "Manual"
+            Fecha = new DateTime(2026, 1, 1)
         });
         await _db.SaveChangesAsync();
 
@@ -136,9 +134,7 @@ public class PresupuestoServiceIntegrationTests : IDisposable
         {
             IngredienteId = harina.Id,
             Precio = 5000m, // el precio se disparó
-            UnidadId = kg.Id,
-            Fecha = new DateTime(2026, 7, 1),
-            Fuente = "Manual"
+            Fecha = new DateTime(2026, 7, 1)
         });
         await _db.SaveChangesAsync();
 

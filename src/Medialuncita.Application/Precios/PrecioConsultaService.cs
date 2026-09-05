@@ -1,20 +1,24 @@
 using Medialuncita.Application.Abstractions;
-using Medialuncita.Application.Costeo;
 using Medialuncita.Domain.Entities;
 
 namespace Medialuncita.Application.Precios;
 
 public interface IPrecioConsultaService
 {
-    Task<PrecioVigente> GetPrecioVigenteIngredienteAsync(int ingredienteId, CancellationToken ct = default);
-    Task<PrecioVigente> GetPrecioVigenteMaterialAsync(int materialId, CancellationToken ct = default);
+    /// <summary>Precio vigente (último registro por fecha), expresado en la UnidadCompra
+    /// del ingrediente. Lanza si el ingrediente no tiene ningún precio cargado todavía.</summary>
+    Task<decimal> GetPrecioVigenteIngredienteAsync(int ingredienteId, CancellationToken ct = default);
+
+    Task<decimal> GetPrecioVigenteMaterialAsync(int materialId, CancellationToken ct = default);
+
     Task<List<HistorialPrecioIngrediente>> GetHistorialIngredienteAsync(int ingredienteId, DateTime? desde = null, DateTime? hasta = null, CancellationToken ct = default);
     Task<List<HistorialPrecioMaterial>> GetHistorialMaterialAsync(int materialId, DateTime? desde = null, DateTime? hasta = null, CancellationToken ct = default);
 
-    /// <summary>Carga un precio nuevo (siempre Fuente="Manual" en el MVP). Es el ÚNICO camino
-    /// para modificar el precio de un ingrediente/material: nunca se actualiza un campo suelto.</summary>
-    Task RegistrarPrecioIngredienteAsync(int ingredienteId, decimal precio, int unidadId, DateTime fecha, string fuente = "Manual", CancellationToken ct = default);
-    Task RegistrarPrecioMaterialAsync(int materialId, decimal precio, int unidadId, DateTime fecha, string fuente = "Manual", CancellationToken ct = default);
+    /// <summary>Carga un precio nuevo. Es el ÚNICO camino para modificar el precio de un
+    /// ingrediente/material: nunca se actualiza un campo suelto, siempre se inserta un
+    /// registro nuevo de historial. El precio se expresa en la UnidadCompra del ingrediente/material.</summary>
+    Task RegistrarPrecioIngredienteAsync(int ingredienteId, decimal precio, DateTime fecha, CancellationToken ct = default);
+    Task RegistrarPrecioMaterialAsync(int materialId, decimal precio, DateTime fecha, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -34,22 +38,18 @@ public class PrecioConsultaService : IPrecioConsultaService
         _uow = uow;
     }
 
-    public async Task<PrecioVigente> GetPrecioVigenteIngredienteAsync(int ingredienteId, CancellationToken ct = default)
+    public async Task<decimal> GetPrecioVigenteIngredienteAsync(int ingredienteId, CancellationToken ct = default)
     {
         var historial = await _ingredientes.GetPrecioVigenteAsync(ingredienteId, ct: ct)
             ?? throw new InvalidOperationException($"El ingrediente {ingredienteId} no tiene ningún precio cargado.");
-
-        return new PrecioVigente(historial.Precio, historial.Unidad
-            ?? throw new InvalidOperationException("El historial de precio no tiene Unidad cargada."));
+        return historial.Precio;
     }
 
-    public async Task<PrecioVigente> GetPrecioVigenteMaterialAsync(int materialId, CancellationToken ct = default)
+    public async Task<decimal> GetPrecioVigenteMaterialAsync(int materialId, CancellationToken ct = default)
     {
         var historial = await _materiales.GetPrecioVigenteAsync(materialId, ct: ct)
             ?? throw new InvalidOperationException($"El material {materialId} no tiene ningún precio cargado.");
-
-        return new PrecioVigente(historial.Precio, historial.Unidad
-            ?? throw new InvalidOperationException("El historial de precio no tiene Unidad cargada."));
+        return historial.Precio;
     }
 
     public Task<List<HistorialPrecioIngrediente>> GetHistorialIngredienteAsync(int ingredienteId, DateTime? desde = null, DateTime? hasta = null, CancellationToken ct = default)
@@ -58,7 +58,7 @@ public class PrecioConsultaService : IPrecioConsultaService
     public Task<List<HistorialPrecioMaterial>> GetHistorialMaterialAsync(int materialId, DateTime? desde = null, DateTime? hasta = null, CancellationToken ct = default)
         => _materiales.GetHistorialAsync(materialId, desde, hasta, ct);
 
-    public async Task RegistrarPrecioIngredienteAsync(int ingredienteId, decimal precio, int unidadId, DateTime fecha, string fuente = "Manual", CancellationToken ct = default)
+    public async Task RegistrarPrecioIngredienteAsync(int ingredienteId, decimal precio, DateTime fecha, CancellationToken ct = default)
     {
         if (precio <= 0) throw new ArgumentOutOfRangeException(nameof(precio), "El precio debe ser mayor a cero.");
 
@@ -66,15 +66,13 @@ public class PrecioConsultaService : IPrecioConsultaService
         {
             IngredienteId = ingredienteId,
             Precio = precio,
-            UnidadId = unidadId,
-            Fecha = fecha,
-            Fuente = fuente
+            Fecha = fecha
         }, ct);
 
         await _uow.SaveChangesAsync(ct);
     }
 
-    public async Task RegistrarPrecioMaterialAsync(int materialId, decimal precio, int unidadId, DateTime fecha, string fuente = "Manual", CancellationToken ct = default)
+    public async Task RegistrarPrecioMaterialAsync(int materialId, decimal precio, DateTime fecha, CancellationToken ct = default)
     {
         if (precio <= 0) throw new ArgumentOutOfRangeException(nameof(precio), "El precio debe ser mayor a cero.");
 
@@ -82,9 +80,7 @@ public class PrecioConsultaService : IPrecioConsultaService
         {
             MaterialId = materialId,
             Precio = precio,
-            UnidadId = unidadId,
-            Fecha = fecha,
-            Fuente = fuente
+            Fecha = fecha
         }, ct);
 
         await _uow.SaveChangesAsync(ct);

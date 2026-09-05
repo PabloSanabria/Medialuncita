@@ -72,13 +72,13 @@ public class PresupuestoService : IPresupuestoService
             var receta = producto.Receta
                 ?? throw new InvalidOperationException($"El producto {producto.Id} no tiene Receta cargada.");
 
-            var precioIngredientes = new Dictionary<int, PrecioVigente>();
+            var precioIngredientes = new Dictionary<int, decimal>();
             foreach (var ri in receta.Ingredientes)
             {
                 precioIngredientes[ri.IngredienteId] = await _precios.GetPrecioVigenteIngredienteAsync(ri.IngredienteId, ct);
             }
 
-            var precioMateriales = new Dictionary<int, PrecioVigente>();
+            var precioMateriales = new Dictionary<int, decimal>();
             foreach (var vm in variante.Materiales)
             {
                 precioMateriales[vm.MaterialId] = await _precios.GetPrecioVigenteMaterialAsync(vm.MaterialId, ct);

@@ -1,0 +1,152 @@
+@page "/ingredientes"
+@inject IIngredienteRepository IngredienteRepo
+@inject IUnidadMedidaRepository UnidadRepo
+@inject IPrecioConsultaService PrecioService
+@inject IUnitOfWork UnitOfWork
+
+<h3>Ingredientes</h3>
+
+<table>
+    <thead>
+        <tr><th>Nombre</th><th>Categoría</th><th>Unidad de compra</th><th>Merma</th><th>Precio vigente</th><th></th></tr>
+    </thead>
+    <tbody>
+        @if (_ingredientes is null)
+        {
+            <tr><td colspan="6">Cargando...</td></tr>
+        }
+        else if (_ingredientes.Count == 0)
+        {
+            <tr><td colspan="6">No hay ingredientes cargados todavía.</td></tr>
+        }
+        else
+        {
+            @foreach (var ing in _ingredientes)
+            {
+                <tr>
+                    <td>@ing.Nombre</td>
+                    <td>@ing.Categoria</td>
+                    <td>@(ing.UnidadCompra?.Abreviatura)</td>
+                    <td>@((ing.MermaDefault * 100).ToString("0.##"))%</td>
+                    <td>@ObtenerPrecioTexto(ing)</td>
+                    <td><a href="@($"ingredientes/{ing.Id}/precios")">Ver precios</a></td>
+                </tr>
+            }
+        }
+    </tbody>
+</table>
+
+<h4>Agregar ingrediente</h4>
+
+<EditForm Model="_nuevo" OnValidSubmit="AgregarAsync">
+    <div>
+        <label>Nombre</label>
+        <InputText @bind-Value="_nuevo.Nombre" />
+    </div>
+    <div>
+        <label>Categoría (opcional)</label>
+        <InputText @bind-Value="_nuevo.Categoria" />
+    </div>
+    <div>
+        <label>Unidad de compra</label>
+        <InputSelect @bind-Value="_unidadCompraId">
+            <option value="0">-- Seleccionar --</option>
+            @if (_unidades is not null)
+            {
+                @foreach (var u in _unidades)
+                {
+                    <option value="@u.Id">@u.Nombre (@u.Abreviatura)</option>
+                }
+            }
+        </InputSelect>
+    </div>
+    <div>
+        <label>Merma por defecto (%)</label>
+        <InputNumber @bind-Value="_mermaPorcentaje" />
+    </div>
+    <div>
+        <label>Densidad g/ml (opcional, solo si se va a usar en recetas cruzando peso/volumen)</label>
+        <InputNumber @bind-Value="_nuevo.DensidadGramosPorMililitro" />
+    </div>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <p style="color:red">@_error</p>
+    }
+
+    <button type="submit">Guardar</button>
+</EditForm>
+
+@code {
+    private List<Ingrediente>? _ingredientes;
+    private List<UnidadMedida>? _unidades;
+    private readonly Dictionary<int, decimal?> _preciosCache = new();
+
+    private Ingrediente _nuevo = new();
+    private int _unidadCompraId;
+    private decimal _mermaPorcentaje;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _unidades = await UnidadRepo.GetAllAsync();
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        _ingredientes = await IngredienteRepo.GetAllActivosAsync();
+        _preciosCache.Clear();
+
+        foreach (var ing in _ingredientes)
+        {
+            try
+            {
+                _preciosCache[ing.Id] = await PrecioService.GetPrecioVigenteIngredienteAsync(ing.Id);
+            }
+            catch (InvalidOperationException)
+            {
+                _preciosCache[ing.Id] = null;
+            }
+        }
+    }
+
+    private string ObtenerPrecioTexto(Ingrediente ingrediente)
+    {
+        if (!_preciosCache.TryGetValue(ingrediente.Id, out var precio) || precio is null)
+            return "Sin precio cargado";
+        return $"${precio:0.##} / {ingrediente.UnidadCompra?.Abreviatura}";
+    }
+
+    private async Task AgregarAsync()
+    {
+        _error = null;
+
+        if (string.IsNullOrWhiteSpace(_nuevo.Nombre))
+        {
+            _error = "El nombre es obligatorio.";
+            return;
+        }
+        if (_unidadCompraId <= 0)
+        {
+            _error = "Elegí una unidad de compra.";
+            return;
+        }
+        if (_mermaPorcentaje is < 0 or >= 100)
+        {
+            _error = "La merma debe estar entre 0 y menos de 100.";
+            return;
+        }
+
+        _nuevo.UnidadCompraId = _unidadCompraId;
+        _nuevo.MermaDefault = _mermaPorcentaje / 100m;
+
+        await IngredienteRepo.AddAsync(_nuevo);
+        await UnitOfWork.SaveChangesAsync();
+
+        _nuevo = new Ingrediente();
+        _unidadCompraId = 0;
+        _mermaPorcentaje = 0;
+        await CargarAsync();
+    }
+}

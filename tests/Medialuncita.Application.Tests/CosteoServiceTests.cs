@@ -97,9 +97,9 @@ public class CosteoServiceTests
             Servicios = new List<VarianteServicio>()
         };
 
-        var precios = new Dictionary<int, PrecioVigente> { [ingrediente.Id] = new PrecioVigente(100m, unidadKg) }; // $100/kg = $0.1/g
+        var precios = new Dictionary<int, decimal> { [ingrediente.Id] = 100m }; // $100/kg = $0.1/g
 
-        var resultado = _sut.CalcularCosto(receta, variante, precios, new Dictionary<int, PrecioVigente>(), tarifaManoDeObraPorHora: 0m);
+        var resultado = _sut.CalcularCosto(receta, variante, precios, new Dictionary<int, decimal>(), tarifaManoDeObraPorHora: 0m);
 
         // CantidadEfectiva = 1kg / (1 - 0.20) = 1.25 kg = 1250 g
         // Subtotal = 1250 * 0.1 = 125
@@ -112,9 +112,9 @@ public class CosteoServiceTests
     {
         var receta = TestDataBuilder.RecetaRogel();
         var variante = TestDataBuilder.Variante12Porciones();
-        var preciosIncompletos = new Dictionary<int, PrecioVigente>(); // vacío a propósito
+        var preciosIncompletos = new Dictionary<int, decimal>(); // vacío a propósito
 
-        var act = () => _sut.CalcularCosto(receta, variante, preciosIncompletos, new Dictionary<int, PrecioVigente>(), 0m);
+        var act = () => _sut.CalcularCosto(receta, variante, preciosIncompletos, new Dictionary<int, decimal>(), 0m);
 
         act.Should().Throw<InvalidOperationException>().WithMessage("*precio vigente*");
     }
@@ -126,7 +126,7 @@ public class CosteoServiceTests
         var variante = TestDataBuilder.Variante12Porciones();
         variante.RendimientoUnidad = TestDataBuilder.Kilogramo; // Peso: incompatible
 
-        var act = () => _sut.CalcularCosto(receta, variante, TestDataBuilder.PreciosIngredientesDefault(), new Dictionary<int, PrecioVigente>(), 0m);
+        var act = () => _sut.CalcularCosto(receta, variante, TestDataBuilder.PreciosIngredientesDefault(), new Dictionary<int, decimal>(), 0m);
 
         act.Should().Throw<InvalidOperationException>();
     }
