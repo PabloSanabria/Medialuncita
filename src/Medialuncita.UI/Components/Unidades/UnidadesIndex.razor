@@ -1,21 +1,23 @@
 @page "/unidades"
 @inject IUnidadMedidaRepository UnidadRepo
 @inject IUnitOfWork UnitOfWork
+@inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <h3>Unidades de medida</h3>
 
 <table>
     <thead>
-        <tr><th>Nombre</th><th>Abrev.</th><th>Tipo</th><th>Factor a unidad base</th></tr>
+        <tr><th>Nombre</th><th>Abrev.</th><th>Tipo</th><th>Factor a unidad base</th><th></th></tr>
     </thead>
     <tbody>
         @if (_unidades is null)
         {
-            <tr><td colspan="4">Cargando...</td></tr>
+            <tr><td colspan="5">Cargando...</td></tr>
         }
         else if (_unidades.Count == 0)
         {
-            <tr><td colspan="4">No hay unidades cargadas todavía.</td></tr>
+            <tr><td colspan="5">No hay unidades cargadas todavía.</td></tr>
         }
         else
         {
@@ -26,11 +28,20 @@
                     <td>@u.Abreviatura</td>
                     <td>@u.Tipo</td>
                     <td>@u.FactorAUnidadBase</td>
+                    <td>
+                        <a href="@($"unidades/{u.Id}/editar")">Editar</a>
+                        <button type="button" @onclick="() => EliminarAsync(u)">Eliminar</button>
+                    </td>
                 </tr>
             }
         }
     </tbody>
 </table>
+
+@if (!string.IsNullOrEmpty(_mensaje))
+{
+    <p style="color:@(_mensajeEsError ? "red" : "green")">@_mensaje</p>
+}
 
 <h4>Agregar unidad</h4>
 
@@ -69,6 +80,8 @@
     private List<UnidadMedida>? _unidades;
     private UnidadMedida _nueva = new() { Tipo = TipoUnidad.Peso };
     private string? _error;
+    private string? _mensaje;
+    private bool _mensajeEsError;
 
     protected override async Task OnInitializedAsync() => await CargarAsync();
 
@@ -101,6 +114,29 @@
         }
 
         _nueva = new UnidadMedida { Tipo = TipoUnidad.Peso };
+        await CargarAsync();
+    }
+
+    private async Task EliminarAsync(UnidadMedida unidad)
+    {
+        _mensaje = null;
+
+        if (await UnidadRepo.EstaEnUsoAsync(unidad.Id))
+        {
+            _mensaje = $"No se puede eliminar '{unidad.Nombre}' porque está siendo utilizada por otros registros " +
+                       "(ingredientes, materiales, recetas o variantes).";
+            _mensajeEsError = true;
+            return;
+        }
+
+        var confirmado = await JS.InvokeAsync<bool>("confirm", $"¿Deseás eliminar '{unidad.Nombre}'? Esta acción no se puede deshacer.");
+        if (!confirmado) return;
+
+        await UnidadRepo.DeleteAsync(unidad);
+        await UnitOfWork.SaveChangesAsync();
+
+        _mensaje = $"'{unidad.Nombre}' fue eliminada.";
+        _mensajeEsError = false;
         await CargarAsync();
     }
 }

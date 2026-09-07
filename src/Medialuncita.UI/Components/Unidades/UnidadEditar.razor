@@ -1,0 +1,90 @@
+@page "/unidades/{Id:int}/editar"
+@inject IUnidadMedidaRepository UnidadRepo
+@inject IUnitOfWork UnitOfWork
+@inject NavigationManager Nav
+
+<h3>Editar unidad</h3>
+
+@if (_unidad is null)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <EditForm Model="_unidad" OnValidSubmit="GuardarAsync">
+        <div>
+            <label>Nombre</label>
+            <InputText @bind-Value="_unidad.Nombre" />
+        </div>
+        <div>
+            <label>Abreviatura</label>
+            <InputText @bind-Value="_unidad.Abreviatura" />
+        </div>
+        <div>
+            <label>Tipo</label>
+            <InputSelect @bind-Value="_unidad.Tipo">
+                @foreach (var tipo in Enum.GetValues<TipoUnidad>())
+                {
+                    <option value="@tipo">@tipo</option>
+                }
+            </InputSelect>
+        </div>
+        <div>
+            <label>Factor a unidad base</label>
+            <InputNumber @bind-Value="_unidad.FactorAUnidadBase" />
+        </div>
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <p style="color:red">@_error</p>
+        }
+
+        <button type="submit">Guardar cambios</button>
+    </EditForm>
+}
+
+<p><a href="/unidades">Volver a unidades</a></p>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private UnidadMedida? _unidad;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _unidad = await UnidadRepo.GetByIdAsync(Id);
+    }
+
+    private async Task GuardarAsync()
+    {
+        _error = null;
+
+        if (_unidad is null) return;
+
+        if (string.IsNullOrWhiteSpace(_unidad.Nombre))
+        {
+            _error = "El nombre es obligatorio.";
+            return;
+        }
+        if (_unidad.FactorAUnidadBase <= 0)
+        {
+            _error = "El factor a unidad base debe ser mayor a cero.";
+            return;
+        }
+
+        try
+        {
+            // _unidad ya está trackeado por el DbContext (se cargó vía GetByIdAsync),
+            // así que alcanza con guardar: no hace falta un "UpdateAsync" explícito.
+            await UnitOfWork.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"No se pudo guardar: {ex.Message}";
+            return;
+        }
+
+        Nav.NavigateTo("/unidades");
+    }
+}

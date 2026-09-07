@@ -4,12 +4,25 @@ namespace Medialuncita.Application.Abstractions;
 
 // Repositorios simples, sin genéricos "mágicos" ni Specification pattern:
 // cada uno expone lo que el caso de uso necesita. Se mantienen finos a propósito.
+//
+// Patrón de edición usado en toda la app: no hay un método "UpdateAsync" genérico.
+// Las pantallas de edición cargan la entidad vía GetByIdAsync (que devuelve la
+// instancia ya trackeada por el DbContext), mutan sus propiedades directamente,
+// y llaman a IUnitOfWork.SaveChangesAsync(). Evita duplicar lógica de "attach"
+// y es coherente con que el DbContext vive durante toda la sesión de la app.
 
 public interface IUnidadMedidaRepository
 {
     Task<UnidadMedida?> GetByIdAsync(int id, CancellationToken ct = default);
     Task<List<UnidadMedida>> GetAllAsync(CancellationToken ct = default);
     Task AddAsync(UnidadMedida unidad, CancellationToken ct = default);
+
+    /// <summary>True si la unidad está referenciada por algún ingrediente, material,
+    /// receta, línea de receta, variante u override — en cualquiera de esos casos NO
+    /// se debe permitir eliminarla.</summary>
+    Task<bool> EstaEnUsoAsync(int id, CancellationToken ct = default);
+
+    Task DeleteAsync(UnidadMedida unidad, CancellationToken ct = default);
 }
 
 public interface IIngredienteRepository
@@ -21,6 +34,16 @@ public interface IIngredienteRepository
     Task<int> AgregarPrecioAsync(HistorialPrecioIngrediente historial, CancellationToken ct = default);
     Task<HistorialPrecioIngrediente?> GetPrecioVigenteAsync(int ingredienteId, DateTime? aFecha = null, CancellationToken ct = default);
     Task<List<HistorialPrecioIngrediente>> GetHistorialAsync(int ingredienteId, DateTime? desde = null, DateTime? hasta = null, CancellationToken ct = default);
+
+    /// <summary>Cantidad de RECETAS DISTINTAS que usan este ingrediente (no de líneas).
+    /// Si es mayor a cero, no se debe eliminar físicamente: se marca Activo = false.</summary>
+    Task<int> ContarRecetasQueLoUsanAsync(int ingredienteId, CancellationToken ct = default);
+
+    Task DeleteAsync(Ingrediente ingrediente, CancellationToken ct = default);
+
+    /// <summary>Elimina un registro puntual del historial de precios (no se puede editar,
+    /// solo agregar o eliminar).</summary>
+    Task EliminarPrecioAsync(int historialId, CancellationToken ct = default);
 }
 
 public interface IMaterialRepository
@@ -31,6 +54,13 @@ public interface IMaterialRepository
     Task<int> AgregarPrecioAsync(HistorialPrecioMaterial historial, CancellationToken ct = default);
     Task<HistorialPrecioMaterial?> GetPrecioVigenteAsync(int materialId, DateTime? aFecha = null, CancellationToken ct = default);
     Task<List<HistorialPrecioMaterial>> GetHistorialAsync(int materialId, DateTime? desde = null, DateTime? hasta = null, CancellationToken ct = default);
+
+    /// <summary>Cantidad de VARIANTES DISTINTAS que usan este material. Si es mayor a
+    /// cero, no se debe eliminar físicamente: se marca Activo = false.</summary>
+    Task<int> ContarVariantesQueLoUsanAsync(int materialId, CancellationToken ct = default);
+
+    Task DeleteAsync(Material material, CancellationToken ct = default);
+    Task EliminarPrecioAsync(int historialId, CancellationToken ct = default);
 }
 
 public interface IRecetaRepository
@@ -38,6 +68,12 @@ public interface IRecetaRepository
     Task<Receta?> GetByIdConIngredientesAsync(int id, CancellationToken ct = default);
     Task<List<Receta>> GetAllActivasAsync(CancellationToken ct = default);
     Task AddAsync(Receta receta, CancellationToken ct = default);
+
+    /// <summary>Cantidad de PRODUCTOS que usan esta receta como receta madre. Si es
+    /// mayor a cero, no se debe permitir eliminarla (no hay soft-delete para recetas).</summary>
+    Task<int> ContarProductosQueLaUsanAsync(int recetaId, CancellationToken ct = default);
+
+    Task DeleteAsync(Receta receta, CancellationToken ct = default);
 }
 
 public interface IProductoRepository

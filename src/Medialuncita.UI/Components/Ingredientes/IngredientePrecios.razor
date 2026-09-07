@@ -2,6 +2,7 @@
 @using System.Linq
 @inject IIngredienteRepository IngredienteRepo
 @inject IPrecioConsultaService PrecioService
+@inject IJSRuntime JS
 
 <h3>Historial de precios</h3>
 
@@ -19,11 +20,11 @@ else
     </p>
 
     <table>
-        <thead><tr><th>Fecha</th><th>Precio</th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Precio</th><th></th></tr></thead>
         <tbody>
             @if (_historial is null || _historial.Count == 0)
             {
-                <tr><td colspan="2">Sin registros todavía.</td></tr>
+                <tr><td colspan="3">Sin registros todavía.</td></tr>
             }
             else
             {
@@ -32,6 +33,7 @@ else
                     <tr>
                         <td>@h.Fecha.ToShortDateString()</td>
                         <td>$@h.Precio.ToString("0.##")</td>
+                        <td><button type="button" @onclick="() => EliminarAsync(h)">Eliminar</button></td>
                     </tr>
                 }
             }
@@ -104,6 +106,16 @@ else
 
         _precio = 0;
         _fecha = DateTime.Today;
+        await CargarAsync();
+    }
+
+    private async Task EliminarAsync(HistorialPrecioIngrediente registro)
+    {
+        var confirmado = await JS.InvokeAsync<bool>("confirm",
+            $"¿Eliminar el precio de ${registro.Precio:0.##} del {registro.Fecha:dd/MM/yyyy}? Esta acción no se puede deshacer.");
+        if (!confirmado) return;
+
+        await PrecioService.EliminarPrecioIngredienteAsync(registro.Id);
         await CargarAsync();
     }
 }

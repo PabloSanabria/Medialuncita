@@ -25,6 +25,15 @@ public class RecetaRepository(MedialuncitaDbContext db) : IRecetaRepository
 
     public async Task AddAsync(Receta receta, CancellationToken ct = default) =>
         await db.Recetas.AddAsync(receta, ct);
+
+    public Task<int> ContarProductosQueLaUsanAsync(int recetaId, CancellationToken ct = default) =>
+        db.Productos.Where(p => p.RecetaId == recetaId).CountAsync(ct);
+
+    public Task DeleteAsync(Receta receta, CancellationToken ct = default)
+    {
+        db.Recetas.Remove(receta);
+        return Task.CompletedTask;
+    }
 }
 
 public class ProductoRepository(MedialuncitaDbContext db) : IProductoRepository

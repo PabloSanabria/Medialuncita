@@ -4,6 +4,7 @@
 @inject IIngredienteRepository IngredienteRepo
 @inject IUnidadMedidaRepository UnidadRepo
 @inject IUnitOfWork UnitOfWork
+@inject IJSRuntime JS
 
 <h3>Recetas</h3>
 
@@ -29,12 +30,21 @@
                     <td>@r.RendimientoBaseCantidad @r.RendimientoBaseUnidad?.Abreviatura</td>
                     <td>@r.TiempoPreparacionBaseMinutos min</td>
                     <td>@r.Ingredientes.Count</td>
-                    <td><a href="@($"recetas/{r.Id}")">Ver detalle</a></td>
+                    <td>
+                        <a href="@($"recetas/{r.Id}")">Ver detalle</a>
+                        <a href="@($"recetas/{r.Id}/editar")">Editar</a>
+                        <button type="button" @onclick="() => EliminarAsync(r)">Eliminar</button>
+                    </td>
                 </tr>
             }
         }
     </tbody>
 </table>
+
+@if (!string.IsNullOrEmpty(_mensaje))
+{
+    <p style="color:@(_mensajeEsError ? "red" : "green")">@_mensaje</p>
+}
 
 <h4>Agregar receta</h4>
 
@@ -164,6 +174,8 @@ else
     private int _tiempoPreparacionMinutos;
     private readonly List<LineaIngredienteForm> _lineas = new();
     private string? _error;
+    private string? _mensaje;
+    private bool _mensajeEsError;
 
     // Datos de la línea que se está por agregar
     private int _lineaIngredienteId;
@@ -215,9 +227,6 @@ else
             return;
         }
 
-        // Validación central pedida: la unidad de la receta tiene que ser compatible con
-        // la unidad de compra del ingrediente (mismo tipo), salvo que haya una conversión
-        // válida definida (cruce Peso<->Volumen con densidad cargada en el ingrediente).
         if (!ConversionUnidades.EsConversionValida(unidadElegida, ingrediente.UnidadCompra.Tipo, ingrediente.DensidadGramosPorMililitro))
         {
             _errorLinea = $"La unidad '{unidadElegida.Nombre}' ({unidadElegida.Tipo}) no es compatible con la unidad de " +
@@ -301,7 +310,6 @@ else
         await RecetaRepo.AddAsync(receta);
         await UnitOfWork.SaveChangesAsync();
 
-        // Reset del formulario completo
         _nombre = string.Empty;
         _descripcion = null;
         _rendimientoCantidad = 0;
@@ -309,6 +317,29 @@ else
         _tiempoPreparacionMinutos = 0;
         _lineas.Clear();
 
+        await CargarRecetasAsync();
+    }
+
+    private async Task EliminarAsync(Receta receta)
+    {
+        _mensaje = null;
+
+        var cantidadProductos = await RecetaRepo.ContarProductosQueLaUsanAsync(receta.Id);
+        if (cantidadProductos > 0)
+        {
+            _mensaje = $"No se puede eliminar '{receta.Nombre}' porque está siendo utilizada por {cantidadProductos} producto(s).";
+            _mensajeEsError = true;
+            return;
+        }
+
+        var confirmado = await JS.InvokeAsync<bool>("confirm", $"¿Deseás eliminar '{receta.Nombre}'? Esta acción no se puede deshacer.");
+        if (!confirmado) return;
+
+        await RecetaRepo.DeleteAsync(receta);
+        await UnitOfWork.SaveChangesAsync();
+
+        _mensaje = $"'{receta.Nombre}' fue eliminada.";
+        _mensajeEsError = false;
         await CargarRecetasAsync();
     }
 

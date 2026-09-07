@@ -1,0 +1,110 @@
+@page "/ingredientes/{Id:int}/editar"
+@inject IIngredienteRepository IngredienteRepo
+@inject IUnidadMedidaRepository UnidadRepo
+@inject IUnitOfWork UnitOfWork
+@inject NavigationManager Nav
+
+<h3>Editar ingrediente</h3>
+
+@if (_ingrediente is null || _unidades is null)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <EditForm Model="_ingrediente" OnValidSubmit="GuardarAsync">
+        <div>
+            <label>Nombre</label>
+            <InputText @bind-Value="_ingrediente.Nombre" />
+        </div>
+        <div>
+            <label>Categoría (opcional)</label>
+            <InputText @bind-Value="_ingrediente.Categoria" />
+        </div>
+        <div>
+            <label>Unidad de compra</label>
+            <InputSelect @bind-Value="_ingrediente.UnidadCompraId">
+                @foreach (var u in _unidades)
+                {
+                    <option value="@u.Id">@u.Nombre (@u.Abreviatura)</option>
+                }
+            </InputSelect>
+        </div>
+        <div>
+            <label>Merma por defecto (%)</label>
+            <InputNumber @bind-Value="_mermaPorcentaje" />
+        </div>
+        <div>
+            <label>Densidad g/ml (opcional)</label>
+            <InputNumber @bind-Value="_ingrediente.DensidadGramosPorMililitro" />
+        </div>
+
+        <p><em>El precio no se edita acá — se maneja desde "Ver precios" en el listado.</em></p>
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <p style="color:red">@_error</p>
+        }
+
+        <button type="submit">Guardar cambios</button>
+    </EditForm>
+}
+
+<p><a href="/ingredientes">Volver a ingredientes</a></p>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Ingrediente? _ingrediente;
+    private List<UnidadMedida>? _unidades;
+    private decimal _mermaPorcentaje;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _unidades = await UnidadRepo.GetAllAsync();
+        _ingrediente = await IngredienteRepo.GetByIdAsync(Id);
+        if (_ingrediente is not null)
+        {
+            _mermaPorcentaje = _ingrediente.MermaDefault * 100m;
+        }
+    }
+
+    private async Task GuardarAsync()
+    {
+        _error = null;
+
+        if (_ingrediente is null) return;
+
+        if (string.IsNullOrWhiteSpace(_ingrediente.Nombre))
+        {
+            _error = "El nombre es obligatorio.";
+            return;
+        }
+        if (_ingrediente.UnidadCompraId <= 0)
+        {
+            _error = "Elegí una unidad de compra.";
+            return;
+        }
+        if (_mermaPorcentaje is < 0 or >= 100)
+        {
+            _error = "La merma debe estar entre 0 y menos de 100.";
+            return;
+        }
+
+        _ingrediente.MermaDefault = _mermaPorcentaje / 100m;
+
+        try
+        {
+            // _ingrediente ya está trackeado (se cargó vía GetByIdAsync): alcanza con guardar.
+            await UnitOfWork.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"No se pudo guardar: {ex.Message}";
+            return;
+        }
+
+        Nav.NavigateTo("/ingredientes");
+    }
+}

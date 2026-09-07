@@ -1,0 +1,105 @@
+@page "/materiales/{Id:int}/editar"
+@inject IMaterialRepository MaterialRepo
+@inject IUnidadMedidaRepository UnidadRepo
+@inject IUnitOfWork UnitOfWork
+@inject NavigationManager Nav
+
+<h3>Editar material</h3>
+
+@if (_material is null || _unidades is null)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <EditForm Model="_material" OnValidSubmit="GuardarAsync">
+        <div>
+            <label>Nombre</label>
+            <InputText @bind-Value="_material.Nombre" />
+        </div>
+        <div>
+            <label>Categoría (opcional)</label>
+            <InputText @bind-Value="_material.Categoria" />
+        </div>
+        <div>
+            <label>Unidad de compra</label>
+            <InputSelect @bind-Value="_material.UnidadCompraId">
+                @foreach (var u in _unidades)
+                {
+                    <option value="@u.Id">@u.Nombre (@u.Abreviatura)</option>
+                }
+            </InputSelect>
+        </div>
+        <div>
+            <label>Merma por defecto (%)</label>
+            <InputNumber @bind-Value="_mermaPorcentaje" />
+        </div>
+
+        <p><em>El precio no se edita acá — se maneja desde "Ver precios" en el listado.</em></p>
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <p style="color:red">@_error</p>
+        }
+
+        <button type="submit">Guardar cambios</button>
+    </EditForm>
+}
+
+<p><a href="/materiales">Volver a materiales</a></p>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Material? _material;
+    private List<UnidadMedida>? _unidades;
+    private decimal _mermaPorcentaje;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _unidades = await UnidadRepo.GetAllAsync();
+        _material = await MaterialRepo.GetByIdAsync(Id);
+        if (_material is not null)
+        {
+            _mermaPorcentaje = _material.MermaDefault * 100m;
+        }
+    }
+
+    private async Task GuardarAsync()
+    {
+        _error = null;
+
+        if (_material is null) return;
+
+        if (string.IsNullOrWhiteSpace(_material.Nombre))
+        {
+            _error = "El nombre es obligatorio.";
+            return;
+        }
+        if (_material.UnidadCompraId <= 0)
+        {
+            _error = "Elegí una unidad de compra.";
+            return;
+        }
+        if (_mermaPorcentaje is < 0 or >= 100)
+        {
+            _error = "La merma debe estar entre 0 y menos de 100.";
+            return;
+        }
+
+        _material.MermaDefault = _mermaPorcentaje / 100m;
+
+        try
+        {
+            await UnitOfWork.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"No se pudo guardar: {ex.Message}";
+            return;
+        }
+
+        Nav.NavigateTo("/materiales");
+    }
+}

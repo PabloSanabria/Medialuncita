@@ -3,6 +3,7 @@
 @inject IUnidadMedidaRepository UnidadRepo
 @inject IPrecioConsultaService PrecioService
 @inject IUnitOfWork UnitOfWork
+@inject IJSRuntime JS
 
 <h3>Ingredientes</h3>
 
@@ -29,12 +30,21 @@
                     <td>@(ing.UnidadCompra?.Abreviatura)</td>
                     <td>@((ing.MermaDefault * 100).ToString("0.##"))%</td>
                     <td>@ObtenerPrecioTexto(ing)</td>
-                    <td><a href="@($"ingredientes/{ing.Id}/precios")">Ver precios</a></td>
+                    <td>
+                        <a href="@($"ingredientes/{ing.Id}/editar")">Editar</a>
+                        <a href="@($"ingredientes/{ing.Id}/precios")">Ver precios</a>
+                        <button type="button" @onclick="() => EliminarAsync(ing)">Eliminar</button>
+                    </td>
                 </tr>
             }
         }
     </tbody>
 </table>
+
+@if (!string.IsNullOrEmpty(_mensaje))
+{
+    <p style="color:@(_mensajeEsError ? "red" : "green")">@_mensaje</p>
+}
 
 <h4>Agregar ingrediente</h4>
 
@@ -86,6 +96,8 @@
     private int _unidadCompraId;
     private decimal _mermaPorcentaje;
     private string? _error;
+    private string? _mensaje;
+    private bool _mensajeEsError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -147,6 +159,36 @@
         _nuevo = new Ingrediente();
         _unidadCompraId = 0;
         _mermaPorcentaje = 0;
+        await CargarAsync();
+    }
+
+    private async Task EliminarAsync(Ingrediente ingrediente)
+    {
+        _mensaje = null;
+
+        var confirmado = await JS.InvokeAsync<bool>("confirm", $"¿Deseás eliminar '{ingrediente.Nombre}'? Esta acción no se puede deshacer.");
+        if (!confirmado) return;
+
+        var cantidadRecetas = await IngredienteRepo.ContarRecetasQueLoUsanAsync(ingrediente.Id);
+
+        if (cantidadRecetas > 0)
+        {
+            // No se elimina físicamente si está en uso: se marca inactivo (soft-delete),
+            // que ya es el criterio que usa GetAllActivosAsync para no volver a listarlo.
+            ingrediente.Activo = false;
+            await UnitOfWork.SaveChangesAsync();
+            _mensaje = $"'{ingrediente.Nombre}' está siendo utilizado por {cantidadRecetas} receta(s): " +
+                       "no se eliminó físicamente, se marcó como inactivo.";
+            _mensajeEsError = false;
+        }
+        else
+        {
+            await IngredienteRepo.DeleteAsync(ingrediente);
+            await UnitOfWork.SaveChangesAsync();
+            _mensaje = $"'{ingrediente.Nombre}' fue eliminado.";
+            _mensajeEsError = false;
+        }
+
         await CargarAsync();
     }
 }

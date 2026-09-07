@@ -3,6 +3,7 @@
 @inject IUnidadMedidaRepository UnidadRepo
 @inject IPrecioConsultaService PrecioService
 @inject IUnitOfWork UnitOfWork
+@inject IJSRuntime JS
 
 <h3>Materiales / Packaging</h3>
 
@@ -29,12 +30,21 @@
                     <td>@(mat.UnidadCompra?.Abreviatura)</td>
                     <td>@((mat.MermaDefault * 100).ToString("0.##"))%</td>
                     <td>@ObtenerPrecioTexto(mat)</td>
-                    <td><a href="@($"materiales/{mat.Id}/precios")">Ver precios</a></td>
+                    <td>
+                        <a href="@($"materiales/{mat.Id}/editar")">Editar</a>
+                        <a href="@($"materiales/{mat.Id}/precios")">Ver precios</a>
+                        <button type="button" @onclick="() => EliminarAsync(mat)">Eliminar</button>
+                    </td>
                 </tr>
             }
         }
     </tbody>
 </table>
+
+@if (!string.IsNullOrEmpty(_mensaje))
+{
+    <p style="color:@(_mensajeEsError ? "red" : "green")">@_mensaje</p>
+}
 
 <h4>Agregar material</h4>
 
@@ -82,6 +92,8 @@
     private int _unidadCompraId;
     private decimal _mermaPorcentaje;
     private string? _error;
+    private string? _mensaje;
+    private bool _mensajeEsError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -143,6 +155,34 @@
         _nuevo = new Material();
         _unidadCompraId = 0;
         _mermaPorcentaje = 0;
+        await CargarAsync();
+    }
+
+    private async Task EliminarAsync(Material material)
+    {
+        _mensaje = null;
+
+        var confirmado = await JS.InvokeAsync<bool>("confirm", $"¿Deseás eliminar '{material.Nombre}'? Esta acción no se puede deshacer.");
+        if (!confirmado) return;
+
+        var cantidadVariantes = await MaterialRepo.ContarVariantesQueLoUsanAsync(material.Id);
+
+        if (cantidadVariantes > 0)
+        {
+            material.Activo = false;
+            await UnitOfWork.SaveChangesAsync();
+            _mensaje = $"'{material.Nombre}' está siendo utilizado por {cantidadVariantes} variante(s): " +
+                       "no se eliminó físicamente, se marcó como inactivo.";
+            _mensajeEsError = false;
+        }
+        else
+        {
+            await MaterialRepo.DeleteAsync(material);
+            await UnitOfWork.SaveChangesAsync();
+            _mensaje = $"'{material.Nombre}' fue eliminado.";
+            _mensajeEsError = false;
+        }
+
         await CargarAsync();
     }
 }

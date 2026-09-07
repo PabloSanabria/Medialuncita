@@ -19,6 +19,12 @@ public interface IPrecioConsultaService
     /// registro nuevo de historial. El precio se expresa en la UnidadCompra del ingrediente/material.</summary>
     Task RegistrarPrecioIngredienteAsync(int ingredienteId, decimal precio, DateTime fecha, CancellationToken ct = default);
     Task RegistrarPrecioMaterialAsync(int materialId, decimal precio, DateTime fecha, CancellationToken ct = default);
+
+    /// <summary>Elimina un registro puntual de historial. Un precio histórico NUNCA se
+    /// modifica: si el usuario se equivocó, se borra y se carga uno nuevo. El precio
+    /// vigente se recalcula solo (siempre es "el registro restante más reciente").</summary>
+    Task EliminarPrecioIngredienteAsync(int historialId, CancellationToken ct = default);
+    Task EliminarPrecioMaterialAsync(int historialId, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -83,6 +89,18 @@ public class PrecioConsultaService : IPrecioConsultaService
             Fecha = fecha
         }, ct);
 
+        await _uow.SaveChangesAsync(ct);
+    }
+
+    public async Task EliminarPrecioIngredienteAsync(int historialId, CancellationToken ct = default)
+    {
+        await _ingredientes.EliminarPrecioAsync(historialId, ct);
+        await _uow.SaveChangesAsync(ct);
+    }
+
+    public async Task EliminarPrecioMaterialAsync(int historialId, CancellationToken ct = default)
+    {
+        await _materiales.EliminarPrecioAsync(historialId, ct);
         await _uow.SaveChangesAsync(ct);
     }
 }
