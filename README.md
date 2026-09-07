@@ -1,167 +1,58 @@
-# Medialuncita — Fase 0 (base técnica)
+# Medialuncita
 
-## ⚠️ Estado de esta entrega
+Aplicación .NET 10 para calcular costos y precios de productos de repostería.
+El host principal es MAUI para Windows, con SQLite local y funcionamiento
+offline.
 
-Todo el código de esta carpeta fue escrito directamente, **sin poder ejecutar
-`dotnet build` ni `dotnet test`**: el entorno donde trabajé no tiene el SDK de
-.NET instalado ni acceso a red para instalarlo o restaurar paquetes NuGet.
+## Estado actual
 
-Esto significa que **no hay garantía de que compile a la primera**. Es código
-escrito con cuidado y siguiendo las prácticas estándar de .NET 10 / EF Core 10,
-pero no fue verificado por un compilador real. Más abajo, en "Puntos a revisar
-primero", te dejo los lugares con más probabilidad de necesitar un ajuste menor.
+La solución contiene Domain, Application, Infrastructure, UI compartida,
+MAUI, Web WASM y tests. Compila con .NET 10 y la suite automatizada tiene 44
+tests aprobados.
 
-Lo que sí podés dar por hecho: la estructura, las decisiones de diseño, el
-modelo de dominio y la lógica del motor de costeo están completos y siguen
-exactamente lo acordado en el análisis y sus dos revisiones.
+La UI de MAUI actualmente permite:
 
----
+- administrar unidades de medida;
+- administrar ingredientes y su historial de precios;
+- administrar materiales/packaging y su historial de precios;
+- crear, consultar, editar y eliminar recetas con sus ingredientes y mermas;
+- crear, consultar, editar y eliminar productos y sus variantes.
 
-## Qué incluye esta Fase 0
+Cada producto referencia una receta madre. Cada variante define su rendimiento,
+unidad compatible y los tiempos adicionales por lote y por unidad. Al eliminar
+un producto se eliminan sus variantes; los presupuestos existentes conservan
+sus datos históricos porque almacenan snapshots y no una clave foránea.
 
-- Solución `.sln` con 6 proyectos: `Domain`, `Application`, `Infrastructure`,
-  `UI` (Razor Class Library), `Web` (Blazor WebAssembly, placeholder), y
-  `Application.Tests`.
-- Modelo de dominio completo (unidades, ingredientes, materiales, historial de
-  precios, recetas, productos, variantes, overrides, servicios, mano de obra,
-  configuración global, presupuestos con snapshot).
-- `DbContext` de EF Core con toda la configuración fluent y seed de
-  configuración global.
-- Motor de costeo (`CosteoService`) 100% determinístico, con distinción de los
-  3 componentes de tiempo de mano de obra, merma matemáticamente correcta,
-  packaging que nunca escala automáticamente, y 4 estrategias de precio con
-  redondeo.
-- `PresupuestoService`, que arma el snapshot completo (todo el detalle
-  congelado, no solo el precio unitario).
-- 18 tests (xUnit + FluentAssertions) cubriendo conversión de unidades, precio
-  por unidad de compra, merma, packaging, mano de obra, servicios, variantes,
-  overrides, margen, multiplicador, redondeo y snapshot de presupuesto
-  (este último con una base SQLite real en memoria, no mockeada).
-- `Medialuncita.MAUI` **no está incluido como proyecto compilable**: ver
-  `src/Medialuncita.MAUI/COMO_SCAFFOLDEAR.md` — necesita generarse con
-  `dotnet new maui-blazor` en tu máquina (ver sección más abajo).
+## Modelo de costeo disponible
 
-## Qué NO incluye (fuera de alcance, según lo acordado)
+El núcleo ya calcula, de manera determinística:
 
-Pantallas de UI completas, IA, consulta de precios de mercado, ubicación,
-INDEC, sincronización/cloud, Web/PWA funcional con persistencia real.
+1. ingredientes y precios vigentes por historial;
+2. conversiones de unidades y densidad peso/volumen;
+3. merma;
+4. packaging por variante;
+5. mano de obra;
+6. servicios por hora o por lote;
+7. costo total, costo unitario y precio de venta.
 
----
+También existe `PresupuestoService`, que congela el resultado de un cálculo
+en un snapshot auditable.
 
-## 1. Requisitos previos
+## Próximo alcance del MVP
 
-- [.NET 10 SDK](https://dot.net) instalado.
-- Para el head Android de MAUI: workload de MAUI + Android SDK (`dotnet
-  workload install maui-android`).
-- Para el head Windows de MAUI: solo compila en Windows (limitación de
-  plataforma, no del proyecto).
-- Git.
+Faltan las pantallas para asignar packaging y servicios a variantes/recetas,
+configurar mano de obra y estrategia de precio, y mostrar el cálculo detallado
+de una variante desde la interfaz. Web/PWA sigue siendo un placeholder sin
+persistencia SQLite en el navegador.
 
-Verificá la instalación:
+## Ejecutar
 
-```bash
-dotnet --version   # debería mostrar 10.x
+Desde la raíz de la solución:
+
+```powershell
+dotnet build Medialuncita.sln
+dotnet test Medialuncita.sln
 ```
 
-## 2. Restaurar y compilar
-
-Desde la raíz del repo (donde está `Medialuncita.sln`):
-
-```bash
-dotnet restore
-dotnet build
-```
-
-Esto compila `Domain`, `Application`, `Infrastructure`, `UI`, `Web` y
-`Application.Tests` — todos multiplataforma, sin necesidad de MAUI todavía.
-
-## 3. Correr los tests
-
-```bash
-dotnet test
-```
-
-Deberías ver 18 tests en verde, repartidos en:
-- `ConversionUnidadesTests`
-- `CosteoServiceTests`
-- `CalculadorPrecioVentaTests`
-- `PresupuestoServiceIntegrationTests` (usa SQLite real en memoria)
-
-## 4. Generar la migración inicial de EF Core
-
-Todavía no hay ninguna migración generada (no pude correr `dotnet ef` en mi
-entorno). Generála vos:
-
-```bash
-dotnet tool install --global dotnet-ef   # si no lo tenés instalado
-cd src/Medialuncita.Infrastructure
-dotnet ef migrations add InitialCreate --output-dir Data/Migrations
-```
-
-Esto va a usar `MedialuncitaDbContextFactory` (ya incluido) para poder
-generarla sin depender de un proyecto "startup" con MAUI o Web. Vas a ver un
-archivo `medialuncita.design.db` creado en esa carpeta al correr el comando —
-está en `.gitignore`, es solo un artefacto de diseño, se puede borrar.
-
-Para aplicarla contra una base real (por ejemplo al levantar MAUI), no hace
-falta correr `dotnet ef database update` a mano: `MauiProgram.reference.cs`
-ya llama a `db.Database.Migrate()` al arrancar.
-
-## 5. Scaffoldear el host MAUI (Android + Windows)
-
-Ver `src/Medialuncita.MAUI/COMO_SCAFFOLDEAR.md` — resumen:
-
-```bash
-dotnet workload install maui
-cd src
-dotnet new maui-blazor -n Medialuncita.MAUI
-# agregar ProjectReference a UI/Application/Infrastructure en el .csproj generado
-# reemplazar MauiProgram.cs por MauiProgram.reference.cs
-dotnet sln ../Medialuncita.sln add Medialuncita.MAUI/Medialuncita.MAUI.csproj
-```
-
-## 6. Trabajar sobre la rama pedida
-
-Todo este contenido está pensado para ir a:
-
-```bash
-git checkout -b feature/fase-0-base
-git add .
-git commit -m "Fase 0: base tecnica de Medialuncita (dominio, motor de costeo, EF Core, tests)"
-```
-
-(No lo hice yo porque no tengo acceso al repo real desde este entorno.)
-
----
-
-## Puntos a revisar primero si algo no compila
-
-Como no pude compilar, estos son los lugares con más chance de necesitar un
-ajuste (por versiones de paquete o sintaxis muy nueva de .NET 10/C# 14, que
-todavía está evolucionando al momento de escribir esto):
-
-1. **Versión de los paquetes NuGet** (`10.0.0` en todos los `.csproj`): si al
-   restaurar no encuentra esa versión exacta de `Microsoft.EntityFrameworkCore.Sqlite`,
-   `Microsoft.AspNetCore.Components.*` o `Microsoft.Extensions.DependencyInjection.*`,
-   ajustá al último estable que te ofrezca NuGet dentro de la línea 10.x.
-2. **`FluentAssertions` 6.12.1**: a partir de cierta versión pasó a requerir
-   licencia comercial para uso no personal. Para uso personal como este
-   proyecto no debería haber problema, pero si `dotnet restore` se queja,
-   revisá la licencia o fijate la última versión libre.
-3. **Primary constructors** (`public class IngredienteRepository(MedialuncitaDbContext db)`):
-   es sintaxis de C# 12+, debería andar en .NET 10, pero si tu SDK resuelve
-   una versión de lenguaje distinta a "latest", puede hacer falta forzar
-   `<LangVersion>` o expandir a constructor tradicional.
-4. **`HasData` en `ConfiguracionGlobal`** dentro de `OnModelCreating`: si EF
-   se queja de que falta un valor para alguna propiedad no nullable al generar
-   la migración, completá esos valores explícitamente ahí.
-5. **`Medialuncita.Web.csproj`**: escribí a mano `index.html`, `_Imports.razor`
-   y `App.razor` siguiendo la plantilla estándar de Blazor WASM, pero no es
-   tan probado como el resto — si `dotnet new blazorwasm` genera algo
-   levemente distinto en tu versión del SDK, es más simple regenerar este
-   proyecto con esa plantilla y volver a agregar la referencia a `UI` y
-   `Application` que hacerlo a mano.
-
-Si encontrás errores de compilación puntuales, pasámelos (el mensaje completo)
-y te ayudo a corregirlos dirigido — puedo seguir escribiendo/corrigiendo
-código en este chat aunque no pueda ejecutarlo yo.
+MAUI aplica las migraciones pendientes al iniciar y crea la base SQLite en el
+directorio privado de datos de la aplicación.

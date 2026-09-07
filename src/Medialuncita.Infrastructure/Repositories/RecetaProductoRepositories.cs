@@ -39,13 +39,28 @@ public class RecetaRepository(MedialuncitaDbContext db) : IRecetaRepository
 public class ProductoRepository(MedialuncitaDbContext db) : IProductoRepository
 {
     public Task<Producto?> GetByIdAsync(int id, CancellationToken ct = default) =>
-        db.Productos.Include(p => p.Receta).Include(p => p.Variantes).FirstOrDefaultAsync(p => p.Id == id, ct);
+        db.Productos
+            .Include(p => p.Receta).ThenInclude(r => r!.RendimientoBaseUnidad)
+            .Include(p => p.Variantes).ThenInclude(v => v.RendimientoUnidad)
+            .FirstOrDefaultAsync(p => p.Id == id, ct);
 
     public Task<List<Producto>> GetAllActivosAsync(CancellationToken ct = default) =>
-        db.Productos.Include(p => p.Receta).Where(p => p.Activo).OrderBy(p => p.Nombre).ToListAsync(ct);
+        db.Productos.Include(p => p.Receta).Include(p => p.Variantes).Where(p => p.Activo).OrderBy(p => p.Nombre).ToListAsync(ct);
 
     public async Task AddAsync(Producto producto, CancellationToken ct = default) =>
         await db.Productos.AddAsync(producto, ct);
+
+    public Task DeleteAsync(Producto producto, CancellationToken ct = default)
+    {
+        db.Productos.Remove(producto);
+        return Task.CompletedTask;
+    }
+
+    public Task DeleteVarianteAsync(ProductoVariante variante, CancellationToken ct = default)
+    {
+        db.ProductoVariantes.Remove(variante);
+        return Task.CompletedTask;
+    }
 
     /// <summary>
     /// Carga completa necesaria para costear: variante -> producto -> receta madre

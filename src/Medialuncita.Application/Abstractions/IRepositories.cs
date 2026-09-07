@@ -81,6 +81,8 @@ public interface IProductoRepository
     Task<Producto?> GetByIdAsync(int id, CancellationToken ct = default);
     Task<List<Producto>> GetAllActivosAsync(CancellationToken ct = default);
     Task AddAsync(Producto producto, CancellationToken ct = default);
+    Task DeleteAsync(Producto producto, CancellationToken ct = default);
+    Task DeleteVarianteAsync(ProductoVariante variante, CancellationToken ct = default);
 
     /// <summary>Trae la variante con todo lo necesario para costear: receta madre,
     /// ingredientes de la receta, overrides, materiales y servicios de la variante.</summary>

@@ -1,0 +1,51 @@
+@page "/productos/{ProductoId:int}/variantes/{VarianteId:int}/editar"
+@inject IProductoRepository ProductoRepo
+@inject IUnidadMedidaRepository UnidadRepo
+@inject IUnitOfWork UnitOfWork
+@inject NavigationManager Nav
+
+<h3>Editar variante</h3>
+
+@if (_producto is null || _variante is null || _unidades is null) { <p>Cargando...</p> }
+else
+{
+    <EditForm Model="_variante" OnValidSubmit="GuardarAsync">
+        <div><label>Nombre</label><InputText @bind-Value="_variante.Nombre" /></div>
+        <div><label>Rendimiento — cantidad</label><InputNumber @bind-Value="_variante.RendimientoCantidad" /></div>
+        <div><label>Rendimiento — unidad</label><InputSelect @bind-Value="_variante.RendimientoUnidadId">@foreach (var unidad in UnidadesCompatibles) { <option value="@unidad.Id">@unidad.Nombre (@unidad.Abreviatura)</option> }</InputSelect></div>
+        <div><label>Tiempo adicional por lote (minutos)</label><InputNumber @bind-Value="_variante.TiempoAdicionalPorLoteMinutos" /></div>
+        <div><label>Tiempo adicional por unidad (minutos)</label><InputNumber @bind-Value="_variante.TiempoAdicionalPorUnidadMinutos" /></div>
+        @if (!string.IsNullOrEmpty(_error)) { <p style="color:red">@_error</p> }
+        <button type="submit">Guardar cambios</button>
+    </EditForm>
+}
+<p><a href="@($"/productos/{ProductoId}")">Volver al producto</a></p>
+
+@code {
+    [Parameter] public int ProductoId { get; set; }
+    [Parameter] public int VarianteId { get; set; }
+    private Producto? _producto;
+    private ProductoVariante? _variante;
+    private List<UnidadMedida>? _unidades;
+    private string? _error;
+    private IEnumerable<UnidadMedida> UnidadesCompatibles => _unidades?.Where(u => u.Tipo == _producto?.Receta?.RendimientoBaseUnidad?.Tipo) ?? [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _unidades = await UnidadRepo.GetAllAsync();
+        _producto = await ProductoRepo.GetByIdAsync(ProductoId);
+        _variante = _producto?.Variantes.FirstOrDefault(v => v.Id == VarianteId);
+    }
+
+    private async Task GuardarAsync()
+    {
+        _error = null;
+        if (_variante is null) return;
+        if (string.IsNullOrWhiteSpace(_variante.Nombre)) { _error = "El nombre es obligatorio."; return; }
+        if (_variante.RendimientoCantidad <= 0) { _error = "El rendimiento debe ser mayor a cero."; return; }
+        if (!UnidadesCompatibles.Any(u => u.Id == _variante.RendimientoUnidadId)) { _error = "Elegí una unidad compatible con la receta."; return; }
+        if (_variante.TiempoAdicionalPorLoteMinutos < 0 || _variante.TiempoAdicionalPorUnidadMinutos < 0) { _error = "Los tiempos no pueden ser negativos."; return; }
+        await UnitOfWork.SaveChangesAsync();
+        Nav.NavigateTo($"/productos/{ProductoId}");
+    }
+}

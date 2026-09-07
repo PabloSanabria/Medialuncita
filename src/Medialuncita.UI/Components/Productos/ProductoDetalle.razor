@@ -1,0 +1,88 @@
+@page "/productos/{Id:int}"
+@inject IProductoRepository ProductoRepo
+@inject IUnidadMedidaRepository UnidadRepo
+@inject IUnitOfWork UnitOfWork
+@inject IJSRuntime JS
+
+<h3>Producto y variantes</h3>
+
+@if (_producto is null || _unidades is null) { <p>Cargando...</p> }
+else
+{
+    <p><strong>Producto:</strong> @_producto.Nombre</p>
+    <p><strong>Receta madre:</strong> @_producto.Receta?.Nombre (@_producto.Receta?.RendimientoBaseCantidad @_producto.Receta?.RendimientoBaseUnidad?.Abreviatura)</p>
+    <p><a href="@($"/productos/{Id}/editar")">Editar producto</a></p>
+    <h4>Variantes</h4>
+    <table>
+        <thead><tr><th>Nombre</th><th>Rendimiento</th><th>Tiempo por lote</th><th>Tiempo por unidad</th><th></th></tr></thead>
+        <tbody>
+            @if (_producto.Variantes.Count == 0) { <tr><td colspan="5">Todavía no hay variantes.</td></tr> }
+            else
+            {
+                @foreach (var variante in _producto.Variantes.OrderBy(v => v.Nombre))
+                {
+                    <tr><td>@variante.Nombre</td><td>@variante.RendimientoCantidad @variante.RendimientoUnidad?.Abreviatura</td><td>@variante.TiempoAdicionalPorLoteMinutos min</td><td>@variante.TiempoAdicionalPorUnidadMinutos min</td>
+                    <td><a href="@($"/productos/{Id}/variantes/{variante.Id}/editar")">Editar</a><button type="button" @onclick="() => EliminarVarianteAsync(variante)">Eliminar</button></td></tr>
+                }
+            }
+        </tbody>
+    </table>
+    <h4>Agregar variante</h4>
+    <EditForm Model="this" OnValidSubmit="AgregarVarianteAsync">
+        <div><label>Nombre</label><InputText @bind-Value="_nombreVariante" /></div>
+        <div><label>Rendimiento — cantidad</label><InputNumber @bind-Value="_rendimientoCantidad" /></div>
+        <div><label>Rendimiento — unidad</label><InputSelect @bind-Value="_rendimientoUnidadId"><option value="0">-- Seleccionar --</option>@foreach (var unidad in UnidadesCompatibles) { <option value="@unidad.Id">@unidad.Nombre (@unidad.Abreviatura)</option> }</InputSelect></div>
+        <div><label>Tiempo adicional por lote (minutos)</label><InputNumber @bind-Value="_tiempoPorLote" /></div>
+        <div><label>Tiempo adicional por unidad (minutos)</label><InputNumber @bind-Value="_tiempoPorUnidad" /></div>
+        @if (!string.IsNullOrEmpty(_error)) { <p style="color:red">@_error</p> }
+        <button type="submit">Guardar variante</button>
+    </EditForm>
+}
+<p><a href="/productos">Volver a productos</a></p>
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private Producto? _producto;
+    private List<UnidadMedida>? _unidades;
+    private string _nombreVariante = string.Empty;
+    private decimal _rendimientoCantidad;
+    private int _rendimientoUnidadId;
+    private int _tiempoPorLote;
+    private int _tiempoPorUnidad;
+    private string? _error;
+    private IEnumerable<UnidadMedida> UnidadesCompatibles => _unidades?.Where(u => u.Tipo == _producto?.Receta?.RendimientoBaseUnidad?.Tipo) ?? [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _unidades = await UnidadRepo.GetAllAsync();
+        _producto = await ProductoRepo.GetByIdAsync(Id);
+    }
+
+    private async Task AgregarVarianteAsync()
+    {
+        _error = ValidarVariante(_nombreVariante, _rendimientoCantidad, _rendimientoUnidadId, _tiempoPorLote, _tiempoPorUnidad);
+        if (_error is not null || _producto is null) return;
+        _producto.Variantes.Add(new ProductoVariante { Nombre = _nombreVariante.Trim(), RendimientoCantidad = _rendimientoCantidad, RendimientoUnidadId = _rendimientoUnidadId, TiempoAdicionalPorLoteMinutos = _tiempoPorLote, TiempoAdicionalPorUnidadMinutos = _tiempoPorUnidad });
+        await UnitOfWork.SaveChangesAsync();
+        _nombreVariante = string.Empty; _rendimientoCantidad = 0; _rendimientoUnidadId = 0; _tiempoPorLote = 0; _tiempoPorUnidad = 0;
+        _producto = await ProductoRepo.GetByIdAsync(Id);
+    }
+
+    private string? ValidarVariante(string nombre, decimal rendimiento, int unidadId, int tiempoLote, int tiempoUnidad)
+    {
+        if (string.IsNullOrWhiteSpace(nombre)) return "El nombre de la variante es obligatorio.";
+        if (rendimiento <= 0) return "El rendimiento debe ser mayor a cero.";
+        if (!UnidadesCompatibles.Any(u => u.Id == unidadId)) return "Elegí una unidad compatible con el rendimiento de la receta.";
+        if (tiempoLote < 0 || tiempoUnidad < 0) return "Los tiempos no pueden ser negativos.";
+        return null;
+    }
+
+    private async Task EliminarVarianteAsync(ProductoVariante variante)
+    {
+        var confirmado = await JS.InvokeAsync<bool>("confirm", $"¿Eliminar la variante '{variante.Nombre}'?");
+        if (!confirmado) return;
+        await ProductoRepo.DeleteVarianteAsync(variante);
+        await UnitOfWork.SaveChangesAsync();
+        _producto = await ProductoRepo.GetByIdAsync(Id);
+    }
+}

@@ -1,0 +1,91 @@
+@page "/productos"
+@inject IProductoRepository ProductoRepo
+@inject IRecetaRepository RecetaRepo
+@inject IUnitOfWork UnitOfWork
+@inject IJSRuntime JS
+
+<h3>Productos</h3>
+
+<table>
+    <thead><tr><th>Nombre</th><th>Receta madre</th><th>Variantes</th><th></th></tr></thead>
+    <tbody>
+        @if (_productos is null) { <tr><td colspan="4">Cargando...</td></tr> }
+        else if (_productos.Count == 0) { <tr><td colspan="4">No hay productos cargados todavía.</td></tr> }
+        else
+        {
+            @foreach (var producto in _productos)
+            {
+                <tr>
+                    <td>@producto.Nombre</td><td>@producto.Receta?.Nombre</td><td>@producto.Variantes.Count</td>
+                    <td>
+                        <a href="@($"/productos/{producto.Id}")">Ver variantes</a>
+                        <a href="@($"/productos/{producto.Id}/editar")">Editar</a>
+                        <button type="button" @onclick="() => EliminarAsync(producto)">Eliminar</button>
+                    </td>
+                </tr>
+            }
+        }
+    </tbody>
+</table>
+
+@if (!string.IsNullOrEmpty(_mensaje)) { <p style="color:@(_mensajeEsError ? "red" : "green")">@_mensaje</p> }
+
+<h4>Agregar producto</h4>
+@if (_recetas is null) { <p>Cargando recetas...</p> }
+else if (_recetas.Count == 0) { <p><em>Primero cargá una receta para poder crear un producto.</em></p> }
+else
+{
+    <EditForm Model="this" OnValidSubmit="AgregarAsync">
+        <div><label>Nombre</label><InputText @bind-Value="_nombre" /></div>
+        <div>
+            <label>Receta madre</label>
+            <InputSelect @bind-Value="_recetaId">
+                <option value="0">-- Seleccionar --</option>
+                @foreach (var receta in _recetas) { <option value="@receta.Id">@receta.Nombre</option> }
+            </InputSelect>
+        </div>
+        @if (!string.IsNullOrEmpty(_error)) { <p style="color:red">@_error</p> }
+        <button type="submit">Guardar producto</button>
+    </EditForm>
+}
+
+@code {
+    private List<Producto>? _productos;
+    private List<Receta>? _recetas;
+    private string _nombre = string.Empty;
+    private int _recetaId;
+    private string? _error;
+    private string? _mensaje;
+    private bool _mensajeEsError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _recetas = await RecetaRepo.GetAllActivasAsync();
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync() => _productos = await ProductoRepo.GetAllActivosAsync();
+
+    private async Task AgregarAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_nombre)) { _error = "El nombre es obligatorio."; return; }
+        if (_recetaId <= 0) { _error = "Elegí una receta madre."; return; }
+        await ProductoRepo.AddAsync(new Producto { Nombre = _nombre.Trim(), RecetaId = _recetaId });
+        await UnitOfWork.SaveChangesAsync();
+        _nombre = string.Empty; _recetaId = 0;
+        await CargarAsync();
+    }
+
+    private async Task EliminarAsync(Producto producto)
+    {
+        _mensaje = null;
+        var confirmado = await JS.InvokeAsync<bool>("confirm", $"¿Eliminar '{producto.Nombre}' y sus {producto.Variantes.Count} variante(s)? Los presupuestos previos conservarán su snapshot.");
+        if (!confirmado) return;
+        await ProductoRepo.DeleteAsync(producto);
+        await UnitOfWork.SaveChangesAsync();
+        _mensaje = $"'{producto.Nombre}' fue eliminado junto con sus variantes.";
+        _mensajeEsError = false;
+        await CargarAsync();
+    }
+}

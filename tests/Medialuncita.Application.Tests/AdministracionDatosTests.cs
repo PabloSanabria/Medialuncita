@@ -22,6 +22,7 @@ public class AdministracionDatosTests : IDisposable
     private readonly IngredienteRepository _ingredientes;
     private readonly MaterialRepository _materiales;
     private readonly RecetaRepository _recetas;
+    private readonly ProductoRepository _productos;
     private readonly EfUnitOfWork _uow;
 
     public AdministracionDatosTests()
@@ -40,6 +41,7 @@ public class AdministracionDatosTests : IDisposable
         _ingredientes = new IngredienteRepository(_db);
         _materiales = new MaterialRepository(_db);
         _recetas = new RecetaRepository(_db);
+        _productos = new ProductoRepository(_db);
         _uow = new EfUnitOfWork(_db);
     }
 
@@ -350,5 +352,56 @@ public class AdministracionDatosTests : IDisposable
         await _db.SaveChangesAsync();
 
         (await _recetas.ContarProductosQueLaUsanAsync(receta.Id)).Should().Be(0);
+    }
+
+    // ---------------- Productos y variantes ----------------
+
+    [Fact]
+    public async Task ModificarProductoYVariante_PersisteLosCambios()
+    {
+        var porcion = new UnidadMedida { Nombre = "Porción", Abreviatura = "porción", Tipo = TipoUnidad.Unidad, FactorAUnidadBase = 1 };
+        _db.UnidadesMedida.Add(porcion);
+        await _db.SaveChangesAsync();
+
+        var receta = new Receta { Nombre = "Brownie", RendimientoBaseCantidad = 12, RendimientoBaseUnidadId = porcion.Id };
+        _db.Recetas.Add(receta);
+        await _db.SaveChangesAsync();
+
+        var producto = new Producto { Nombre = "Brownie clásico", RecetaId = receta.Id };
+        producto.Variantes.Add(new ProductoVariante { Nombre = "Caja de 12", RendimientoCantidad = 12, RendimientoUnidadId = porcion.Id });
+        await _productos.AddAsync(producto);
+        await _uow.SaveChangesAsync();
+
+        var cargado = await _productos.GetByIdAsync(producto.Id);
+        cargado!.Nombre = "Brownie con nuez";
+        cargado.Variantes.Single().TiempoAdicionalPorLoteMinutos = 15;
+        await _uow.SaveChangesAsync();
+
+        var releido = await _productos.GetByIdAsync(producto.Id);
+        releido!.Nombre.Should().Be("Brownie con nuez");
+        releido.Receta!.Nombre.Should().Be("Brownie");
+        releido.Variantes.Should().ContainSingle();
+        releido.Variantes.Single().TiempoAdicionalPorLoteMinutos.Should().Be(15);
+        releido.Variantes.Single().RendimientoUnidad!.Tipo.Should().Be(TipoUnidad.Unidad);
+    }
+
+    [Fact]
+    public async Task EliminarProducto_CascadeaSusVariantes()
+    {
+        var porcion = new UnidadMedida { Nombre = "Porción", Abreviatura = "porción", Tipo = TipoUnidad.Unidad, FactorAUnidadBase = 1 };
+        _db.UnidadesMedida.Add(porcion);
+        await _db.SaveChangesAsync();
+
+        var receta = new Receta { Nombre = "Alfajor", RendimientoBaseCantidad = 6, RendimientoBaseUnidadId = porcion.Id };
+        var producto = new Producto { Nombre = "Alfajor de maicena", Receta = receta };
+        producto.Variantes.Add(new ProductoVariante { Nombre = "Media docena", RendimientoCantidad = 6, RendimientoUnidad = porcion });
+        _db.Productos.Add(producto);
+        await _db.SaveChangesAsync();
+
+        await _productos.DeleteAsync(producto);
+        await _uow.SaveChangesAsync();
+
+        (await _productos.GetByIdAsync(producto.Id)).Should().BeNull();
+        (await _db.ProductoVariantes.AnyAsync(v => v.ProductoId == producto.Id)).Should().BeFalse();
     }
 }

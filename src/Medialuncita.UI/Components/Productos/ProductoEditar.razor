@@ -1,0 +1,54 @@
+@page "/productos/{Id:int}/editar"
+@inject IProductoRepository ProductoRepo
+@inject IRecetaRepository RecetaRepo
+@inject IUnitOfWork UnitOfWork
+@inject NavigationManager Nav
+
+<h3>Editar producto</h3>
+
+@if (_producto is null || _recetas is null) { <p>Cargando...</p> }
+else
+{
+    <EditForm Model="_producto" OnValidSubmit="GuardarAsync">
+        <div><label>Nombre</label><InputText @bind-Value="_producto.Nombre" /></div>
+        <div>
+            <label>Receta madre</label>
+            <InputSelect @bind-Value="_producto.RecetaId">
+                @foreach (var receta in _recetas) { <option value="@receta.Id">@receta.Nombre</option> }
+            </InputSelect>
+        </div>
+        <p><em>La receta elegida debe tener un tipo de rendimiento compatible con las variantes existentes.</em></p>
+        @if (!string.IsNullOrEmpty(_error)) { <p style="color:red">@_error</p> }
+        <button type="submit">Guardar cambios</button>
+    </EditForm>
+}
+<p><a href="@($"/productos/{Id}")">Volver al producto</a></p>
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private Producto? _producto;
+    private List<Receta>? _recetas;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _producto = await ProductoRepo.GetByIdAsync(Id);
+        _recetas = await RecetaRepo.GetAllActivasAsync();
+    }
+
+    private async Task GuardarAsync()
+    {
+        _error = null;
+        if (_producto is null || _recetas is null) return;
+        if (string.IsNullOrWhiteSpace(_producto.Nombre)) { _error = "El nombre es obligatorio."; return; }
+        var receta = _recetas.FirstOrDefault(r => r.Id == _producto.RecetaId);
+        if (receta?.RendimientoBaseUnidad is null) { _error = "Elegí una receta válida."; return; }
+        if (_producto.Variantes.Any(v => v.RendimientoUnidad?.Tipo != receta.RendimientoBaseUnidad.Tipo))
+        {
+            _error = "No podés asignar esta receta: el tipo de rendimiento no coincide con una variante existente.";
+            return;
+        }
+        await UnitOfWork.SaveChangesAsync();
+        Nav.NavigateTo($"/productos/{Id}");
+    }
+}
