@@ -51,6 +51,30 @@ else
             }
         </tbody>
     </table>
+
+    <h5>Servicios de la receta</h5>
+
+    <table>
+        <thead>
+            <tr><th>Servicio</th><th>Modo de prorrateo</th></tr>
+        </thead>
+        <tbody>
+            @if (_receta.Servicios.Count == 0)
+            {
+                <tr><td colspan="2">Sin servicios asociados.</td></tr>
+            }
+            else
+            {
+                @foreach (var rs in _receta.Servicios)
+                {
+                    <tr>
+                        <td>@rs.Servicio?.Nombre</td>
+                        <td>@rs.ModoProrrateo</td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
 }
 
 <p><a href="/recetas">Volver a recetas</a></p>

@@ -58,6 +58,7 @@ else if (_ingredientesDisponibles.Count == 0)
 }
 else
 {
+    <EditForm Model="this">
     <div>
         <label>Nombre</label>
         <InputText @bind-Value="_nombre" />
@@ -159,6 +160,7 @@ else
     }
 
     <button type="button" @onclick="GuardarRecetaAsync">Guardar receta</button>
+    </EditForm>
 }
 
 @code {

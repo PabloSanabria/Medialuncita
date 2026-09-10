@@ -1,0 +1,109 @@
+@page "/configuracion"
+@inject IConfiguracionGlobalRepository ConfigRepo
+
+<h3>Configuración global</h3>
+
+<p><em>Valores por defecto usados al calcular costos y precios. Cada variante puede
+sobreescribir la estrategia de precio y el redondeo desde su propia pantalla.</em></p>
+
+@if (_config is null)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <EditForm Model="this" OnValidSubmit="GuardarAsync">
+        <div>
+            <label>Tarifa de mano de obra por hora</label>
+            <InputNumber @bind-Value="_config.TarifaManoDeObraPorHora" />
+        </div>
+        <div>
+            <label>Estrategia de precio por defecto</label>
+            <InputSelect @bind-Value="_config.EstrategiaPrecioDefault">
+                @foreach (var estrategia in Enum.GetValues<EstrategiaPrecio>())
+                {
+                    <option value="@estrategia">@estrategia</option>
+                }
+            </InputSelect>
+        </div>
+        <div>
+            <label>Margen por defecto (%) — usado si la estrategia es Margen</label>
+            <InputNumber @bind-Value="_margenPorcentaje" />
+        </div>
+        <div>
+            <label>Multiplicador por defecto — usado si la estrategia es Multiplicador</label>
+            <InputNumber @bind-Value="_config.MultiplicadorDefault" />
+        </div>
+        <div>
+            <label>Estrategia de redondeo por defecto</label>
+            <InputSelect @bind-Value="_config.EstrategiaRedondeoDefault">
+                @foreach (var redondeo in Enum.GetValues<EstrategiaRedondeo>())
+                {
+                    <option value="@redondeo">@redondeo</option>
+                }
+            </InputSelect>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <p style="color:red">@_error</p>
+        }
+        @if (!string.IsNullOrEmpty(_mensaje))
+        {
+            <p style="color:green">@_mensaje</p>
+        }
+
+        <button type="submit">Guardar configuración</button>
+    </EditForm>
+}
+
+@code {
+    private ConfiguracionGlobal? _config;
+    private decimal _margenPorcentaje;
+    private string? _error;
+    private string? _mensaje;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _config = await ConfigRepo.GetAsync();
+        _margenPorcentaje = _config.MargenPorcentualDefault * 100m;
+    }
+
+    private async Task GuardarAsync()
+    {
+        _error = null;
+        _mensaje = null;
+
+        if (_config is null) return;
+
+        if (_config.TarifaManoDeObraPorHora < 0)
+        {
+            _error = "La tarifa de mano de obra no puede ser negativa.";
+            return;
+        }
+        if (_margenPorcentaje < 0)
+        {
+            _error = "El margen no puede ser negativo.";
+            return;
+        }
+        if (_config.MultiplicadorDefault <= 0)
+        {
+            _error = "El multiplicador debe ser mayor a cero.";
+            return;
+        }
+
+        _config.MargenPorcentualDefault = _margenPorcentaje / 100m;
+
+        try
+        {
+            await ConfigRepo.SaveAsync(_config);
+        }
+        catch (Exception ex)
+        {
+            _error = $"No se pudo guardar: {ex.Message}";
+            return;
+        }
+
+        _mensaje = "Configuración guardada.";
+    }
+}

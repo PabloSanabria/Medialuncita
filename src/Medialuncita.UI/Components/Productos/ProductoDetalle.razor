@@ -22,7 +22,7 @@ else
                 @foreach (var variante in _producto.Variantes.OrderBy(v => v.Nombre))
                 {
                     <tr><td>@variante.Nombre</td><td>@variante.RendimientoCantidad @variante.RendimientoUnidad?.Abreviatura</td><td>@variante.TiempoAdicionalPorLoteMinutos min</td><td>@variante.TiempoAdicionalPorUnidadMinutos min</td>
-                    <td><a href="@($"/productos/{Id}/variantes/{variante.Id}/editar")">Editar</a><button type="button" @onclick="() => EliminarVarianteAsync(variante)">Eliminar</button></td></tr>
+                    <td><a href="@($"/productos/{Id}/variantes/{variante.Id}")">Ver detalle / calcular</a> <a href="@($"/productos/{Id}/variantes/{variante.Id}/editar")">Editar</a><button type="button" @onclick="() => EliminarVarianteAsync(variante)">Eliminar</button></td></tr>
                 }
             }
         </tbody>

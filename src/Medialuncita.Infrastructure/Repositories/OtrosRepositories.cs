@@ -15,6 +15,21 @@ public class ServicioRepository(MedialuncitaDbContext db) : IServicioRepository
 
     public async Task AddAsync(Servicio servicio, CancellationToken ct = default) =>
         await db.Servicios.AddAsync(servicio, ct);
+
+    public async Task<int> ContarUsosAsync(int servicioId, CancellationToken ct = default)
+    {
+        var enRecetas = await db.RecetaServicios.Select(rs => new { rs.ServicioId, rs.RecetaId })
+            .Where(x => x.ServicioId == servicioId).Select(x => x.RecetaId).Distinct().CountAsync(ct);
+        var enVariantes = await db.VarianteServicios.Select(vs => new { vs.ServicioId, vs.VarianteId })
+            .Where(x => x.ServicioId == servicioId).Select(x => x.VarianteId).Distinct().CountAsync(ct);
+        return enRecetas + enVariantes;
+    }
+
+    public Task DeleteAsync(Servicio servicio, CancellationToken ct = default)
+    {
+        db.Servicios.Remove(servicio);
+        return Task.CompletedTask;
+    }
 }
 
 public class ConfiguracionGlobalRepository(MedialuncitaDbContext db) : IConfiguracionGlobalRepository

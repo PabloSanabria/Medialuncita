@@ -8,8 +8,7 @@ primero se cargan las unidades, los ingredientes y sus precios; después se
 crean las recetas, los productos y sus variantes.
 
 Este manual describe las pantallas disponibles actualmente en la aplicación
-MAUI. Las opciones de costeo detallado, packaging por variante, servicios,
-mano de obra y precio final todavía no tienen pantalla de usuario.
+MAUI, incluyendo el cálculo detallado de costo y precio de venta por variante.
 
 ## Antes de empezar
 
@@ -19,9 +18,13 @@ orden:
 1. Unidades de medida.
 2. Ingredientes y sus precios.
 3. Materiales de packaging y sus precios, si ya los conocés.
-4. Recetas.
-5. Productos.
-6. Variantes de cada producto.
+4. Servicios (gas, luz, alquiler), si los vas a prorratear.
+5. Configuración global (tarifa de mano de obra, estrategia de precio y
+   redondeo por defecto).
+6. Recetas.
+7. Productos.
+8. Variantes de cada producto (packaging, servicios propios y, si hace falta,
+   una estrategia de precio distinta a la global).
 
 Los precios se registran por la unidad de compra. Por ejemplo, si la harina se
 compra por kilogramo, ingresá el precio de un kilogramo, aunque en la receta la
@@ -60,6 +63,29 @@ de compra, la merma y el historial de precios.
 Por ahora los materiales se registran en el catálogo, pero todavía no se
 asignan desde la interfaz a una variante de producto.
 
+## Servicios
+
+En **Servicios**, cargá los costos prorrateables (gas, electricidad, agua,
+alquiler, etc.). Cada servicio necesita al menos un costo: por hora, por lote,
+o ambos — el modo de prorrateo se elige después, al asignarlo a una receta o
+a una variante.
+
+Si un servicio ya está asignado a alguna receta o variante, al eliminarlo se
+marca como inactivo en vez de borrarlo, para no romper los cálculos existentes.
+
+## Configuración global
+
+En **Configuración**, definí:
+
+- la **tarifa de mano de obra por hora**, usada para costear el tiempo de
+  preparación de todas las variantes;
+- la **estrategia de precio por defecto** (Margen, Multiplicador o Manual) y
+  su valor asociado (margen % o multiplicador);
+- la **estrategia de redondeo por defecto** del precio final.
+
+Cualquier variante puede sobreescribir la estrategia de precio y el redondeo
+desde su propia pantalla; si no lo hace, usa estos valores globales.
+
 ## Recetas
 
 En **Recetas**, ingresá nombre, descripción opcional, rendimiento y tiempo de
@@ -74,6 +100,11 @@ Podés dejar vacía la merma override para usar la merma habitual del
 ingrediente. Si la receta necesita una merma distinta, ingresala en porcentaje
 para esa línea. Las recetas pueden editarse, incluyendo agregar, cambiar o
 quitar ingredientes. No se puede eliminar una receta vinculada a un producto.
+
+Desde la pantalla de edición de la receta también podés asociar **servicios**
+que se prorratean sobre el lote completo (por ejemplo, el gas del horno). Para
+cada servicio elegís si se cobra por hora o por lote; solo aparecen disponibles
+los servicios que tienen cargado el costo correspondiente a ese modo.
 
 ## Productos
 
@@ -94,15 +125,36 @@ adicional por lote y tiempo adicional por unidad. La unidad de rendimiento de
 la variante debe tener el mismo tipo que el rendimiento de la receta madre.
 Podés editar o eliminar variantes desde la misma pantalla del producto.
 
+Desde el producto, hacé clic en **Ver detalle / calcular** en cualquier
+variante para entrar a su pantalla de detalle, donde podés:
+
+- **Asignar packaging**: elegí un material y la cantidad que usa esta
+  variante (no se recalcula automáticamente al cambiar el rendimiento — el
+  packaging se declara por variante).
+- **Asignar servicios propios**: además de los servicios de la receta madre,
+  una variante puede tener servicios adicionales (por ejemplo, un horno extra
+  para decoración).
+- **Definir su propia estrategia de precio**: si dejás los campos en
+  "-- Usar valor global --", la variante hereda la configuración general.
+  Si elegís Margen, Multiplicador o Manual, cargá el valor correspondiente
+  (margen %, multiplicador o precio fijo) y, si querés, un redondeo distinto
+  al general.
+- **Calcular costo y precio de venta**: el botón "Calcular costo y precio de
+  venta" muestra el desglose completo — cada ingrediente con su merma y
+  precio, cada material de packaging, cada servicio, el tiempo total y la
+  mano de obra, el costo total del lote, el costo por unidad y el precio de
+  venta final ya redondeado.
+
+Para poder calcular, todos los ingredientes y materiales usados por la
+variante (y por su receta madre) necesitan tener al menos un precio cargado
+en su historial. Si falta alguno, el cálculo muestra qué precio falta en vez
+de arrojar un resultado incompleto.
+
 ## Próximas pantallas
 
-El siguiente objetivo es completar el cálculo desde la interfaz. Se agregarán:
-
-- materiales de packaging por variante;
-- servicios de receta y variante;
-- configuración de mano de obra y estrategia de precio;
-- resumen de ingredientes, mermas, packaging, mano de obra, servicios, costo
-  total, costo por unidad y precio de venta.
+El siguiente objetivo es generar presupuestos (cotizaciones) desde la interfaz
+—hoy el motor que arma esos snapshots solo se usa desde los tests— y agregar
+persistencia real en la versión Web.
 
 ## Ayuda ante errores frecuentes
 
@@ -117,6 +169,10 @@ información. Revisá los datos que la referencian antes de eliminarla.
 
 **No hay precio vigente.** Abrí el ingrediente o material, ingresá un precio
 mayor a cero y guardalo con la fecha correspondiente.
+
+**No puedo agregar un servicio a una receta o variante.** El servicio no
+tiene cargado el costo correspondiente al modo de prorrateo elegido (por
+hora o por lote). Editalo desde **Servicios** y completá ese costo.
 
 ## Mantenimiento del manual
 

@@ -1,0 +1,141 @@
+@page "/servicios"
+@inject IServicioRepository ServicioRepo
+@inject IUnitOfWork UnitOfWork
+@inject IJSRuntime JS
+
+<h3>Servicios</h3>
+
+<p><em>Gas, electricidad, agua, alquiler u otros costos prorrateables entre recetas y variantes.</em></p>
+
+<table>
+    <thead>
+        <tr><th>Nombre</th><th>Costo por hora</th><th>Costo por lote</th><th></th></tr>
+    </thead>
+    <tbody>
+        @if (_servicios is null)
+        {
+            <tr><td colspan="4">Cargando...</td></tr>
+        }
+        else if (_servicios.Count == 0)
+        {
+            <tr><td colspan="4">No hay servicios cargados todavía.</td></tr>
+        }
+        else
+        {
+            @foreach (var servicio in _servicios)
+            {
+                <tr>
+                    <td>@servicio.Nombre</td>
+                    <td>@(servicio.CostoPorHora is null ? "—" : $"${servicio.CostoPorHora:0.##}")</td>
+                    <td>@(servicio.CostoPorLote is null ? "—" : $"${servicio.CostoPorLote:0.##}")</td>
+                    <td>
+                        <a href="@($"servicios/{servicio.Id}/editar")">Editar</a>
+                        <button type="button" @onclick="() => EliminarAsync(servicio)">Eliminar</button>
+                    </td>
+                </tr>
+            }
+        }
+    </tbody>
+</table>
+
+@if (!string.IsNullOrEmpty(_mensaje))
+{
+    <p style="color:@(_mensajeEsError ? "red" : "green")">@_mensaje</p>
+}
+
+<h4>Agregar servicio</h4>
+
+<EditForm Model="_nuevo" OnValidSubmit="AgregarAsync">
+    <div>
+        <label>Nombre</label>
+        <InputText @bind-Value="_nuevo.Nombre" />
+    </div>
+    <div>
+        <label>Costo por hora (opcional)</label>
+        <InputNumber @bind-Value="_nuevo.CostoPorHora" />
+    </div>
+    <div>
+        <label>Costo por lote (opcional)</label>
+        <InputNumber @bind-Value="_nuevo.CostoPorLote" />
+    </div>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <p style="color:red">@_error</p>
+    }
+
+    <button type="submit">Guardar</button>
+</EditForm>
+
+@code {
+    private List<Servicio>? _servicios;
+    private Servicio _nuevo = new();
+    private string? _error;
+    private string? _mensaje;
+    private bool _mensajeEsError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        _servicios = await ServicioRepo.GetAllActivosAsync();
+    }
+
+    private async Task AgregarAsync()
+    {
+        _error = null;
+
+        if (string.IsNullOrWhiteSpace(_nuevo.Nombre))
+        {
+            _error = "El nombre es obligatorio.";
+            return;
+        }
+        if (_nuevo.CostoPorHora is null && _nuevo.CostoPorLote is null)
+        {
+            _error = "Cargá al menos un costo (por hora o por lote).";
+            return;
+        }
+        if (_nuevo.CostoPorHora is < 0 || _nuevo.CostoPorLote is < 0)
+        {
+            _error = "Los costos no pueden ser negativos.";
+            return;
+        }
+
+        await ServicioRepo.AddAsync(_nuevo);
+        await UnitOfWork.SaveChangesAsync();
+
+        _nuevo = new Servicio();
+        await CargarAsync();
+    }
+
+    private async Task EliminarAsync(Servicio servicio)
+    {
+        _mensaje = null;
+
+        var confirmado = await JS.InvokeAsync<bool>("confirm", $"¿Deseás eliminar '{servicio.Nombre}'? Esta acción no se puede deshacer.");
+        if (!confirmado) return;
+
+        var cantidadUsos = await ServicioRepo.ContarUsosAsync(servicio.Id);
+
+        if (cantidadUsos > 0)
+        {
+            servicio.Activo = false;
+            await UnitOfWork.SaveChangesAsync();
+            _mensaje = $"'{servicio.Nombre}' está siendo utilizado por {cantidadUsos} receta(s)/variante(s): " +
+                       "no se eliminó físicamente, se marcó como inactivo.";
+            _mensajeEsError = false;
+        }
+        else
+        {
+            await ServicioRepo.DeleteAsync(servicio);
+            await UnitOfWork.SaveChangesAsync();
+            _mensaje = $"'{servicio.Nombre}' fue eliminado.";
+            _mensajeEsError = false;
+        }
+
+        await CargarAsync();
+    }
+}

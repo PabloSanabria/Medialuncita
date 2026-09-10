@@ -1,0 +1,514 @@
+@page "/productos/{ProductoId:int}/variantes/{VarianteId:int}"
+@using Medialuncita.Application.Costeo.Dtos
+@inject IProductoRepository ProductoRepo
+@inject IMaterialRepository MaterialRepo
+@inject IServicioRepository ServicioRepo
+@inject IConfiguracionGlobalRepository ConfigRepo
+@inject IPrecioConsultaService PrecioService
+@inject ICosteoService CosteoService
+@inject IUnitOfWork UnitOfWork
+@inject IJSRuntime JS
+
+<h3>Detalle de variante</h3>
+
+@if (_variante is null || _materialesDisponibles is null || _serviciosDisponibles is null || _configuracion is null)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <p>
+        <strong>@_variante.Nombre</strong> — producto: @_variante.Producto?.Nombre —
+        rinde @_variante.RendimientoCantidad @_variante.RendimientoUnidad?.Abreviatura
+    </p>
+    <p><a href="@($"/productos/{ProductoId}/variantes/{VarianteId}/editar")">Editar nombre / rendimiento / tiempos</a></p>
+
+    <hr />
+
+    <h4>Packaging (materiales)</h4>
+
+    <table>
+        <thead><tr><th>Material</th><th>Cantidad</th><th>Unidad de compra</th><th></th></tr></thead>
+        <tbody>
+            @if (_variante.Materiales.Count == 0)
+            {
+                <tr><td colspan="4"><em>Sin materiales asignados.</em></td></tr>
+            }
+            else
+            {
+                @foreach (var vm in _variante.Materiales)
+                {
+                    <tr>
+                        <td>@vm.Material?.Nombre</td>
+                        <td>@vm.Cantidad</td>
+                        <td>@vm.Material?.UnidadCompra?.Abreviatura</td>
+                        <td><button type="button" @onclick="() => QuitarMaterialAsync(vm)">Quitar</button></td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+
+    <EditForm Model="this">
+    <div>
+        <label>Material</label>
+        <InputSelect @bind-Value="_materialSeleccionadoId">
+            <option value="0">-- Seleccionar --</option>
+            @foreach (var m in _materialesDisponibles.Where(m => _variante.Materiales.All(vm => vm.MaterialId != m.Id)))
+            {
+                <option value="@m.Id">@m.Nombre (@m.UnidadCompra?.Abreviatura)</option>
+            }
+        </InputSelect>
+    </div>
+    <div>
+        <label>Cantidad (en la unidad de compra del material)</label>
+        <InputNumber @bind-Value="_cantidadMaterial" />
+    </div>
+    @if (!string.IsNullOrEmpty(_errorMaterial))
+    {
+        <p style="color:red">@_errorMaterial</p>
+    }
+    <button type="button" @onclick="AgregarMaterialAsync">Agregar material</button>
+    </EditForm>
+
+    <hr />
+
+    <h4>Servicios de esta variante</h4>
+    <p><em>Además de los servicios de la receta madre, que se prorratean sobre el lote completo.</em></p>
+
+    <table>
+        <thead><tr><th>Servicio</th><th>Modo de prorrateo</th><th></th></tr></thead>
+        <tbody>
+            @if (_variante.Servicios.Count == 0)
+            {
+                <tr><td colspan="3"><em>Sin servicios propios asignados.</em></td></tr>
+            }
+            else
+            {
+                @foreach (var vs in _variante.Servicios)
+                {
+                    <tr>
+                        <td>@vs.Servicio?.Nombre</td>
+                        <td>@vs.ModoProrrateo</td>
+                        <td><button type="button" @onclick="() => QuitarServicioAsync(vs)">Quitar</button></td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+
+    <EditForm Model="this">
+    <div>
+        <label>Servicio</label>
+        <InputSelect @bind-Value="_servicioSeleccionadoId">
+            <option value="0">-- Seleccionar --</option>
+            @foreach (var s in _serviciosDisponibles.Where(s => _variante.Servicios.All(vs => vs.ServicioId != s.Id)))
+            {
+                <option value="@s.Id">@s.Nombre</option>
+            }
+        </InputSelect>
+    </div>
+    <div>
+        <label>Modo de prorrateo</label>
+        <InputSelect @bind-Value="_modoProrrateoServicio">
+            @foreach (var modo in Enum.GetValues<ModoProrrateo>())
+            {
+                <option value="@modo">@modo</option>
+            }
+        </InputSelect>
+    </div>
+    @if (!string.IsNullOrEmpty(_errorServicio))
+    {
+        <p style="color:red">@_errorServicio</p>
+    }
+    <button type="button" @onclick="AgregarServicioAsync">Agregar servicio</button>
+    </EditForm>
+
+    <hr />
+
+    <h4>Estrategia de precio de esta variante</h4>
+    <p><em>Dejá un campo vacío / en "-- Usar valor global --" para heredar la configuración
+    general (<a href="/configuracion">ver / editar configuración global</a>).</em></p>
+
+    <EditForm Model="this" OnValidSubmit="GuardarEstrategiaAsync">
+        <div>
+            <label>Estrategia de precio</label>
+            <InputSelect @bind-Value="_variante.EstrategiaPrecioOverride">
+                <option value="">-- Usar valor global (@_configuracion.EstrategiaPrecioDefault) --</option>
+                @foreach (var estrategia in Enum.GetValues<EstrategiaPrecio>())
+                {
+                    <option value="@estrategia">@estrategia</option>
+                }
+            </InputSelect>
+        </div>
+        <div>
+            <label>Margen (%) — si la estrategia es Margen</label>
+            <InputNumber @bind-Value="_margenPorcentajeOverride" />
+        </div>
+        <div>
+            <label>Multiplicador — si la estrategia es Multiplicador</label>
+            <InputNumber @bind-Value="_variante.MultiplicadorOverride" />
+        </div>
+        <div>
+            <label>Precio manual — si la estrategia es Manual</label>
+            <InputNumber @bind-Value="_variante.PrecioManualOverride" />
+        </div>
+        <div>
+            <label>Estrategia de redondeo</label>
+            <InputSelect @bind-Value="_variante.EstrategiaRedondeoOverride">
+                <option value="">-- Usar valor global (@_configuracion.EstrategiaRedondeoDefault) --</option>
+                @foreach (var redondeo in Enum.GetValues<EstrategiaRedondeo>())
+                {
+                    <option value="@redondeo">@redondeo</option>
+                }
+            </InputSelect>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_errorEstrategia))
+        {
+            <p style="color:red">@_errorEstrategia</p>
+        }
+        @if (!string.IsNullOrEmpty(_mensajeEstrategia))
+        {
+            <p style="color:green">@_mensajeEstrategia</p>
+        }
+
+        <button type="submit">Guardar estrategia de precio</button>
+    </EditForm>
+
+    <hr />
+
+    <h4>Cálculo</h4>
+
+    <button type="button" @onclick="CalcularAsync">Calcular costo y precio de venta</button>
+
+    @if (!string.IsNullOrEmpty(_errorCalculo))
+    {
+        <p style="color:red">@_errorCalculo</p>
+    }
+
+    @if (_resultadoCosteo is not null)
+    {
+        <h5>Ingredientes</h5>
+        <table>
+            <thead><tr><th>Ingrediente</th><th>Cantidad</th><th>Merma</th><th>Precio unitario</th><th>Subtotal</th></tr></thead>
+            <tbody>
+                @foreach (var d in _resultadoCosteo.Ingredientes)
+                {
+                    <tr>
+                        <td>@d.NombreIngrediente</td>
+                        <td>@d.CantidadRequerida @d.UnidadRequerida</td>
+                        <td>@((d.MermaAplicada * 100).ToString("0.##"))%</td>
+                        <td>$@d.PrecioUnitarioUsado.ToString("0.##")</td>
+                        <td>$@d.Subtotal.ToString("0.##")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <h5>Materiales</h5>
+        <table>
+            <thead><tr><th>Material</th><th>Cantidad</th><th>Merma</th><th>Precio unitario</th><th>Subtotal</th></tr></thead>
+            <tbody>
+                @if (_resultadoCosteo.Materiales.Count == 0)
+                {
+                    <tr><td colspan="5"><em>Sin materiales.</em></td></tr>
+                }
+                else
+                {
+                    @foreach (var d in _resultadoCosteo.Materiales)
+                    {
+                        <tr>
+                            <td>@d.NombreMaterial</td>
+                            <td>@d.CantidadRequerida @d.UnidadBase</td>
+                            <td>@((d.MermaAplicada * 100).ToString("0.##"))%</td>
+                            <td>$@d.PrecioUnitarioUsado.ToString("0.##")</td>
+                            <td>$@d.Subtotal.ToString("0.##")</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+
+        <h5>Servicios</h5>
+        <table>
+            <thead><tr><th>Servicio</th><th>Modo</th><th>Subtotal</th></tr></thead>
+            <tbody>
+                @if (_resultadoCosteo.Servicios.Count == 0)
+                {
+                    <tr><td colspan="3"><em>Sin servicios.</em></td></tr>
+                }
+                else
+                {
+                    @foreach (var d in _resultadoCosteo.Servicios)
+                    {
+                        <tr>
+                            <td>@d.NombreServicio</td>
+                            <td>@d.ModoProrrateo</td>
+                            <td>$@d.Subtotal.ToString("0.##")</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+
+        <h5>Totales</h5>
+        <table>
+            <tbody>
+                <tr><td>Tiempo total</td><td>@_resultadoCosteo.TiempoTotalMinutos minutos (tarifa $@_resultadoCosteo.TarifaManoDeObraPorHora.ToString("0.##")/hora)</td></tr>
+                <tr><td>Costo ingredientes</td><td>$@_resultadoCosteo.CostoIngredientes.ToString("0.##")</td></tr>
+                <tr><td>Costo packaging</td><td>$@_resultadoCosteo.CostoPackaging.ToString("0.##")</td></tr>
+                <tr><td>Costo mano de obra</td><td>$@_resultadoCosteo.CostoManoDeObra.ToString("0.##")</td></tr>
+                <tr><td>Costo servicios</td><td>$@_resultadoCosteo.CostoServicios.ToString("0.##")</td></tr>
+                <tr><td><strong>Costo total del lote</strong></td><td><strong>$@_resultadoCosteo.CostoTotal.ToString("0.##")</strong></td></tr>
+                <tr><td><strong>Costo unitario</strong></td><td><strong>$@_resultadoCosteo.CostoUnitario.ToString("0.##")</strong></td></tr>
+            </tbody>
+        </table>
+
+        @if (_resultadoPrecio is not null)
+        {
+            <h5>Precio de venta</h5>
+            <table>
+                <tbody>
+                    <tr><td>Estrategia</td><td>@_resultadoPrecio.Estrategia</td></tr>
+                    <tr><td>Redondeo</td><td>@_resultadoPrecio.Redondeo</td></tr>
+                    <tr><td>Precio sin redondeo</td><td>$@_resultadoPrecio.PrecioUnitarioSinRedondeo.ToString("0.##")</td></tr>
+                    <tr><td><strong>Precio de venta final (por unidad)</strong></td><td><strong>$@_resultadoPrecio.PrecioUnitarioFinal.ToString("0.##")</strong></td></tr>
+                </tbody>
+            </table>
+        }
+    }
+}
+
+<p><a href="@($"/productos/{ProductoId}")">Volver al producto</a></p>
+
+@code {
+    [Parameter] public int ProductoId { get; set; }
+    [Parameter] public int VarianteId { get; set; }
+
+    private ProductoVariante? _variante;
+    private List<Material>? _materialesDisponibles;
+    private List<Servicio>? _serviciosDisponibles;
+    private ConfiguracionGlobal? _configuracion;
+
+    private int _materialSeleccionadoId;
+    private decimal _cantidadMaterial;
+    private string? _errorMaterial;
+
+    private int _servicioSeleccionadoId;
+    private ModoProrrateo _modoProrrateoServicio = ModoProrrateo.PorHora;
+    private string? _errorServicio;
+
+    private decimal _margenPorcentajeOverride;
+    private string? _errorEstrategia;
+    private string? _mensajeEstrategia;
+
+    private ResultadoCosteo? _resultadoCosteo;
+    private ResultadoPrecioVenta? _resultadoPrecio;
+    private string? _errorCalculo;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        _variante = await ProductoRepo.GetVarianteParaCosteoAsync(VarianteId);
+        _materialesDisponibles = await MaterialRepo.GetAllActivosAsync();
+        _serviciosDisponibles = await ServicioRepo.GetAllActivosAsync();
+        _configuracion = await ConfigRepo.GetAsync();
+
+        if (_variante is not null)
+        {
+            _margenPorcentajeOverride = _variante.MargenPorcentualOverride.HasValue
+                ? _variante.MargenPorcentualOverride.Value * 100m
+                : 0m;
+        }
+    }
+
+    // ---------------- Packaging ----------------
+
+    private async Task AgregarMaterialAsync()
+    {
+        _errorMaterial = null;
+
+        if (_materialSeleccionadoId <= 0)
+        {
+            _errorMaterial = "Elegí un material.";
+            return;
+        }
+        if (_cantidadMaterial <= 0)
+        {
+            _errorMaterial = "La cantidad debe ser mayor a cero.";
+            return;
+        }
+
+        var material = _materialesDisponibles!.First(m => m.Id == _materialSeleccionadoId);
+        _variante!.Materiales.Add(new VarianteMaterial
+        {
+            MaterialId = material.Id,
+            Material = material,
+            Cantidad = _cantidadMaterial
+        });
+
+        await UnitOfWork.SaveChangesAsync();
+        _materialSeleccionadoId = 0;
+        _cantidadMaterial = 0;
+        await CargarAsync();
+    }
+
+    private async Task QuitarMaterialAsync(VarianteMaterial vm)
+    {
+        var confirmado = await JS.InvokeAsync<bool>("confirm", $"¿Quitar '{vm.Material?.Nombre}' de esta variante?");
+        if (!confirmado) return;
+
+        _variante!.Materiales.Remove(vm);
+        await UnitOfWork.SaveChangesAsync();
+        await CargarAsync();
+    }
+
+    // ---------------- Servicios ----------------
+
+    private async Task AgregarServicioAsync()
+    {
+        _errorServicio = null;
+
+        if (_servicioSeleccionadoId <= 0)
+        {
+            _errorServicio = "Elegí un servicio.";
+            return;
+        }
+
+        var servicio = _serviciosDisponibles!.First(s => s.Id == _servicioSeleccionadoId);
+
+        if (_modoProrrateoServicio == ModoProrrateo.PorHora && servicio.CostoPorHora is null)
+        {
+            _errorServicio = $"'{servicio.Nombre}' no tiene costo por hora cargado.";
+            return;
+        }
+        if (_modoProrrateoServicio == ModoProrrateo.PorLote && servicio.CostoPorLote is null)
+        {
+            _errorServicio = $"'{servicio.Nombre}' no tiene costo por lote cargado.";
+            return;
+        }
+
+        _variante!.Servicios.Add(new VarianteServicio
+        {
+            ServicioId = servicio.Id,
+            Servicio = servicio,
+            ModoProrrateo = _modoProrrateoServicio
+        });
+
+        await UnitOfWork.SaveChangesAsync();
+        _servicioSeleccionadoId = 0;
+        _modoProrrateoServicio = ModoProrrateo.PorHora;
+        await CargarAsync();
+    }
+
+    private async Task QuitarServicioAsync(VarianteServicio vs)
+    {
+        var confirmado = await JS.InvokeAsync<bool>("confirm", $"¿Quitar '{vs.Servicio?.Nombre}' de esta variante?");
+        if (!confirmado) return;
+
+        _variante!.Servicios.Remove(vs);
+        await UnitOfWork.SaveChangesAsync();
+        await CargarAsync();
+    }
+
+    // ---------------- Estrategia de precio ----------------
+
+    private async Task GuardarEstrategiaAsync()
+    {
+        _errorEstrategia = null;
+        _mensajeEstrategia = null;
+
+        if (_variante is null) return;
+
+        if (_variante.EstrategiaPrecioOverride is EstrategiaPrecio.Margen && _margenPorcentajeOverride <= 0)
+        {
+            _errorEstrategia = "Cargá un margen mayor a cero para la estrategia Margen.";
+            return;
+        }
+        if (_variante.EstrategiaPrecioOverride is EstrategiaPrecio.Multiplicador &&
+            (_variante.MultiplicadorOverride is null || _variante.MultiplicadorOverride <= 0))
+        {
+            _errorEstrategia = "Cargá un multiplicador mayor a cero para la estrategia Multiplicador.";
+            return;
+        }
+        if (_variante.EstrategiaPrecioOverride is EstrategiaPrecio.Manual &&
+            (_variante.PrecioManualOverride is null || _variante.PrecioManualOverride <= 0))
+        {
+            _errorEstrategia = "Cargá un precio manual mayor a cero para la estrategia Manual.";
+            return;
+        }
+
+        // Solo se conserva el override numérico relevante a la estrategia elegida;
+        // el resto se limpia para no dejar datos "fantasma" que no se van a usar.
+        _variante.MargenPorcentualOverride = _variante.EstrategiaPrecioOverride is EstrategiaPrecio.Margen
+            ? _margenPorcentajeOverride / 100m
+            : null;
+        if (_variante.EstrategiaPrecioOverride is not EstrategiaPrecio.Multiplicador)
+            _variante.MultiplicadorOverride = null;
+        if (_variante.EstrategiaPrecioOverride is not EstrategiaPrecio.Manual)
+            _variante.PrecioManualOverride = null;
+
+        try
+        {
+            await UnitOfWork.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorEstrategia = $"No se pudo guardar: {ex.Message}";
+            return;
+        }
+
+        _mensajeEstrategia = "Estrategia de precio guardada.";
+    }
+
+    // ---------------- Cálculo ----------------
+
+    private async Task CalcularAsync()
+    {
+        _errorCalculo = null;
+        _resultadoCosteo = null;
+        _resultadoPrecio = null;
+
+        if (_variante?.Producto?.Receta is null)
+        {
+            _errorCalculo = "No se pudo cargar la receta madre de esta variante.";
+            return;
+        }
+
+        var receta = _variante.Producto.Receta;
+
+        try
+        {
+            var idsIngredientes = receta.Ingredientes.Select(ri => ri.IngredienteId)
+                .Concat(_variante.IngredienteOverrides.Select(o => o.IngredienteId))
+                .Distinct();
+
+            var preciosIngredientes = new Dictionary<int, decimal>();
+            foreach (var id in idsIngredientes)
+                preciosIngredientes[id] = await PrecioService.GetPrecioVigenteIngredienteAsync(id);
+
+            var preciosMateriales = new Dictionary<int, decimal>();
+            foreach (var id in _variante.Materiales.Select(m => m.MaterialId).Distinct())
+                preciosMateriales[id] = await PrecioService.GetPrecioVigenteMaterialAsync(id);
+
+            var config = await ConfigRepo.GetAsync();
+
+            _resultadoCosteo = CosteoService.CalcularCosto(
+                receta, _variante, preciosIngredientes, preciosMateriales, config.TarifaManoDeObraPorHora);
+
+            var estrategia = _variante.EstrategiaPrecioOverride ?? config.EstrategiaPrecioDefault;
+            var margen = _variante.MargenPorcentualOverride ?? config.MargenPorcentualDefault;
+            var multiplicador = _variante.MultiplicadorOverride ?? config.MultiplicadorDefault;
+            var redondeo = _variante.EstrategiaRedondeoOverride ?? config.EstrategiaRedondeoDefault;
+
+            _resultadoPrecio = CosteoService.CalcularPrecioVenta(
+                _resultadoCosteo.CostoUnitario, estrategia, margen, multiplicador, _variante.PrecioManualOverride, redondeo);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _errorCalculo = ex.Message;
+        }
+    }
+}

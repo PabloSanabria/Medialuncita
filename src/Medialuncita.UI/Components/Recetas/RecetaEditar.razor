@@ -3,6 +3,7 @@
 @inject IRecetaRepository RecetaRepo
 @inject IIngredienteRepository IngredienteRepo
 @inject IUnidadMedidaRepository UnidadRepo
+@inject IServicioRepository ServicioRepo
 @inject IUnitOfWork UnitOfWork
 @inject NavigationManager Nav
 
@@ -14,6 +15,7 @@
 }
 else
 {
+    <EditForm Model="_receta">
     <div>
         <label>Nombre</label>
         <InputText @bind-Value="_receta.Nombre" />
@@ -53,8 +55,9 @@ else
             }
             else
             {
-                @foreach (var ri in _receta.Ingredientes.ToList())
+                @foreach (var linea in _lineas)
                 {
+                    var ri = linea.Ingrediente;
                     <tr>
                         <td>@ri.Ingrediente?.Nombre</td>
                         <td><InputNumber @bind-Value="ri.Cantidad" /></td>
@@ -66,8 +69,8 @@ else
                                 }
                             </InputSelect>
                         </td>
-                        <td><InputNumber @bind-Value="_mermaPorcentajePorLinea[ri]" /></td>
-                        <td><button type="button" @onclick="() => QuitarLinea(ri)">Quitar</button></td>
+                        <td><InputNumber @bind-Value="linea.MermaOverridePorcentaje" /></td>
+                        <td><button type="button" @onclick="() => QuitarLinea(linea)">Quitar</button></td>
                     </tr>
                 }
             }
@@ -114,12 +117,72 @@ else
 
     <hr />
 
+    <h5>Servicios de la receta</h5>
+    <p><em>Se prorratean sobre el LOTE completo (ej: gas del horno). Los servicios propios
+    de cada variante se cargan aparte, desde la pantalla de la variante.</em></p>
+
+    <table>
+        <thead>
+            <tr><th>Servicio</th><th>Modo de prorrateo</th><th></th></tr>
+        </thead>
+        <tbody>
+            @if (_receta.Servicios.Count == 0)
+            {
+                <tr><td colspan="3"><em>Sin servicios asociados.</em></td></tr>
+            }
+            else
+            {
+                @foreach (var rs in _receta.Servicios.ToList())
+                {
+                    <tr>
+                        <td>@rs.Servicio?.Nombre</td>
+                        <td>@rs.ModoProrrateo</td>
+                        <td><button type="button" @onclick="() => QuitarServicio(rs)">Quitar</button></td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+
+    <div>
+        <label>Servicio a agregar</label>
+        <InputSelect @bind-Value="_servicioId">
+            <option value="0">-- Seleccionar --</option>
+            @if (_serviciosDisponibles is not null)
+            {
+                @foreach (var s in _serviciosDisponibles.Where(s => _receta.Servicios.All(rs => rs.ServicioId != s.Id)))
+                {
+                    <option value="@s.Id">@s.Nombre</option>
+                }
+            }
+        </InputSelect>
+    </div>
+    <div>
+        <label>Modo de prorrateo</label>
+        <InputSelect @bind-Value="_modoProrrateo">
+            @foreach (var modo in Enum.GetValues<ModoProrrateo>())
+            {
+                <option value="@modo">@modo</option>
+            }
+        </InputSelect>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_errorServicio))
+    {
+        <p style="color:red">@_errorServicio</p>
+    }
+
+    <button type="button" @onclick="AgregarServicio">Agregar servicio</button>
+
+    <hr />
+
     @if (!string.IsNullOrEmpty(_error))
     {
         <p style="color:red">@_error</p>
     }
 
     <button type="button" @onclick="GuardarCambiosAsync">Guardar cambios</button>
+    </EditForm>
 }
 
 <p><a href="@($"/recetas/{Id}")">Volver al detalle</a></p>
@@ -130,11 +193,24 @@ else
     private Receta? _receta;
     private List<Ingrediente>? _ingredientesDisponibles;
     private List<UnidadMedida>? _unidades;
+    private List<Servicio>? _serviciosDisponibles;
 
-    // Clave por REFERENCIA de objeto (no por Id): las líneas nuevas todavía no
-    // tienen Id asignado (es 0 hasta guardar), así que indexar por Id colisionaría
-    // si se agregan varias líneas nuevas en la misma edición.
-    private readonly Dictionary<RecetaIngrediente, decimal?> _mermaPorcentajePorLinea = new();
+    private int _servicioId;
+    private ModoProrrateo _modoProrrateo = ModoProrrateo.PorHora;
+    private string? _errorServicio;
+
+    // No se puede bindear un InputNumber directamente a un indexador de diccionario
+    // (Blazor necesita una MemberExpression real para el binding; un diccionario
+    // compila a una llamada a método y tira InvalidCastException en tiempo de
+    // ejecución). Por eso cada línea existente se envuelve en esta clase, que sí
+    // expone una propiedad simple para bindear.
+    private class LineaIngredienteEdit
+    {
+        public required RecetaIngrediente Ingrediente { get; init; }
+        public decimal? MermaOverridePorcentaje { get; set; }
+    }
+
+    private readonly List<LineaIngredienteEdit> _lineas = new();
 
     private int _lineaIngredienteId;
     private decimal _lineaCantidad;
@@ -147,13 +223,18 @@ else
     {
         _ingredientesDisponibles = await IngredienteRepo.GetAllActivosAsync();
         _unidades = await UnidadRepo.GetAllAsync();
+        _serviciosDisponibles = await ServicioRepo.GetAllActivosAsync();
         _receta = await RecetaRepo.GetByIdConIngredientesAsync(Id);
 
         if (_receta is not null)
         {
             foreach (var ri in _receta.Ingredientes)
             {
-                _mermaPorcentajePorLinea[ri] = ri.MermaOverride.HasValue ? ri.MermaOverride.Value * 100m : null;
+                _lineas.Add(new LineaIngredienteEdit
+                {
+                    Ingrediente = ri,
+                    MermaOverridePorcentaje = ri.MermaOverride.HasValue ? ri.MermaOverride.Value * 100m : null
+                });
             }
         }
     }
@@ -209,7 +290,7 @@ else
         };
 
         _receta!.Ingredientes.Add(nuevaLinea);
-        _mermaPorcentajePorLinea[nuevaLinea] = _lineaMermaOverridePorcentaje;
+        _lineas.Add(new LineaIngredienteEdit { Ingrediente = nuevaLinea, MermaOverridePorcentaje = _lineaMermaOverridePorcentaje });
 
         _lineaIngredienteId = 0;
         _lineaCantidad = 0;
@@ -217,10 +298,49 @@ else
         _lineaMermaOverridePorcentaje = null;
     }
 
-    private void QuitarLinea(RecetaIngrediente linea)
+    private void QuitarLinea(LineaIngredienteEdit linea)
     {
-        _receta!.Ingredientes.Remove(linea);
-        _mermaPorcentajePorLinea.Remove(linea);
+        _receta!.Ingredientes.Remove(linea.Ingrediente);
+        _lineas.Remove(linea);
+    }
+
+    private void AgregarServicio()
+    {
+        _errorServicio = null;
+
+        if (_servicioId <= 0)
+        {
+            _errorServicio = "Elegí un servicio.";
+            return;
+        }
+
+        var servicio = _serviciosDisponibles!.First(s => s.Id == _servicioId);
+
+        if (_modoProrrateo == ModoProrrateo.PorHora && servicio.CostoPorHora is null)
+        {
+            _errorServicio = $"'{servicio.Nombre}' no tiene costo por hora cargado. Editalo en Servicios o elegí 'Por lote'.";
+            return;
+        }
+        if (_modoProrrateo == ModoProrrateo.PorLote && servicio.CostoPorLote is null)
+        {
+            _errorServicio = $"'{servicio.Nombre}' no tiene costo por lote cargado. Editalo en Servicios o elegí 'Por hora'.";
+            return;
+        }
+
+        _receta!.Servicios.Add(new RecetaServicio
+        {
+            ServicioId = servicio.Id,
+            Servicio = servicio,
+            ModoProrrateo = _modoProrrateo
+        });
+
+        _servicioId = 0;
+        _modoProrrateo = ModoProrrateo.PorHora;
+    }
+
+    private void QuitarServicio(RecetaServicio linea)
+    {
+        _receta!.Servicios.Remove(linea);
     }
 
     private async Task GuardarCambiosAsync()
@@ -255,15 +375,17 @@ else
             return;
         }
 
-        foreach (var ri in _receta.Ingredientes)
+        foreach (var linea in _lineas)
         {
+            var ri = linea.Ingrediente;
+
             if (ri.Cantidad <= 0)
             {
                 _error = $"La cantidad de '{ri.Ingrediente?.Nombre}' debe ser mayor a cero.";
                 return;
             }
 
-            var pct = _mermaPorcentajePorLinea.TryGetValue(ri, out var v) ? v : null;
+            var pct = linea.MermaOverridePorcentaje;
             if (pct is < 0 or >= 100)
             {
                 _error = $"La merma override de '{ri.Ingrediente?.Nombre}' debe estar entre 0 y menos de 100.";

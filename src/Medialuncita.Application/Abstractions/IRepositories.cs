@@ -94,6 +94,13 @@ public interface IServicioRepository
     Task<Servicio?> GetByIdAsync(int id, CancellationToken ct = default);
     Task<List<Servicio>> GetAllActivosAsync(CancellationToken ct = default);
     Task AddAsync(Servicio servicio, CancellationToken ct = default);
+
+    /// <summary>Cantidad de RECETAS o VARIANTES DISTINTAS que usan este servicio
+    /// (RecetaServicio + VarianteServicio). Si es mayor a cero, no se debe eliminar
+    /// físicamente: se marca Activo = false.</summary>
+    Task<int> ContarUsosAsync(int servicioId, CancellationToken ct = default);
+
+    Task DeleteAsync(Servicio servicio, CancellationToken ct = default);
 }
 
 public interface IConfiguracionGlobalRepository

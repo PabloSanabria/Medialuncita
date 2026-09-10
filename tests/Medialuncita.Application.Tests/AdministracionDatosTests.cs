@@ -23,6 +23,7 @@ public class AdministracionDatosTests : IDisposable
     private readonly MaterialRepository _materiales;
     private readonly RecetaRepository _recetas;
     private readonly ProductoRepository _productos;
+    private readonly ServicioRepository _servicios;
     private readonly EfUnitOfWork _uow;
 
     public AdministracionDatosTests()
@@ -42,6 +43,7 @@ public class AdministracionDatosTests : IDisposable
         _materiales = new MaterialRepository(_db);
         _recetas = new RecetaRepository(_db);
         _productos = new ProductoRepository(_db);
+        _servicios = new ServicioRepository(_db);
         _uow = new EfUnitOfWork(_db);
     }
 
@@ -403,5 +405,56 @@ public class AdministracionDatosTests : IDisposable
 
         (await _productos.GetByIdAsync(producto.Id)).Should().BeNull();
         (await _db.ProductoVariantes.AnyAsync(v => v.ProductoId == producto.Id)).Should().BeFalse();
+    }
+
+    // ---------------- Servicios ----------------
+
+    [Fact]
+    public async Task EliminarServicio_SinUsos_LoBorraFisicamente()
+    {
+        var servicio = new Servicio { Nombre = "Gas", CostoPorHora = 200m };
+        await _servicios.AddAsync(servicio);
+        await _uow.SaveChangesAsync();
+
+        (await _servicios.ContarUsosAsync(servicio.Id)).Should().Be(0);
+
+        await _servicios.DeleteAsync(servicio);
+        await _uow.SaveChangesAsync();
+
+        (await _servicios.GetByIdAsync(servicio.Id)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ContarUsosDeServicio_CuentaRecetasYVariantesDistintas()
+    {
+        var porcion = new UnidadMedida { Nombre = "Porción", Abreviatura = "porción", Tipo = TipoUnidad.Unidad, FactorAUnidadBase = 1 };
+        _db.UnidadesMedida.Add(porcion);
+        await _db.SaveChangesAsync();
+
+        var servicio = new Servicio { Nombre = "Electricidad", CostoPorHora = 100m, CostoPorLote = 50m };
+        await _servicios.AddAsync(servicio);
+        await _uow.SaveChangesAsync();
+
+        var receta = new Receta { Nombre = "Torta", RendimientoBaseCantidad = 8, RendimientoBaseUnidadId = porcion.Id };
+        receta.Servicios.Add(new RecetaServicio { ServicioId = servicio.Id, ModoProrrateo = ModoProrrateo.PorHora });
+        _db.Recetas.Add(receta);
+        await _db.SaveChangesAsync();
+
+        var producto = new Producto { Nombre = "Torta de chocolate", RecetaId = receta.Id };
+        var variante = new ProductoVariante { Nombre = "8 porciones", RendimientoCantidad = 8, RendimientoUnidadId = porcion.Id };
+        variante.Servicios.Add(new VarianteServicio { ServicioId = servicio.Id, ModoProrrateo = ModoProrrateo.PorLote });
+        producto.Variantes.Add(variante);
+        await _productos.AddAsync(producto);
+        await _uow.SaveChangesAsync();
+
+        (await _servicios.ContarUsosAsync(servicio.Id)).Should().Be(2); // 1 receta + 1 variante
+
+        // Al estar en uso, la pantalla debe optar por soft-delete en vez de borrado físico.
+        servicio.Activo = false;
+        await _uow.SaveChangesAsync();
+
+        var releido = await _servicios.GetByIdAsync(servicio.Id);
+        releido!.Activo.Should().BeFalse();
+        (await _servicios.GetAllActivosAsync()).Should().NotContain(s => s.Id == servicio.Id);
     }
 }
