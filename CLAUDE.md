@@ -156,6 +156,55 @@ sesión):
    modelo los soporta y `CosteoService`/`GetVarianteParaCosteoAsync` ya los
    contemplan, pero no hay pantalla para cargarlos).
 
+## Entrega de validación y cierre (revisión estática post-MVP)
+
+Sesión dedicada exclusivamente a verificar de punta a punta el flujo:
+Ingrediente+precio → Receta → Producto → Variante → Packaging/Servicios →
+Configuración global → Cálculo detallado → Costo total/unitario → Precio de
+venta. No se agregó funcionalidad nueva (presupuestos, PDF e IA siguen fuera
+de alcance).
+
+**Método usado:** revisión de código estática, archivo por archivo, en vez de
+ejecución real. El sandbox de esta sesión no tiene acceso a `nuget.org`
+(bloqueado por la config de red: `x-deny-reason: host_not_allowed`), así que
+no se pudieron restaurar paquetes NuGet ni correr `dotnet build`/`dotnet test`
+para `Application`/`Infrastructure`/`UI`/`Web`/`Tests` (sí compiló `Domain`,
+que no tiene dependencias externas). `MAUI` tampoco compila en Linux por el
+workload de Windows, como ya se sabía. **Pablo debe correr `dotnet build` y
+`dotnet test` en su VS y confirmar el resultado** — esta sesión no lo
+certificó por ejecución real.
+
+**Verificado por lectura de código (sin encontrar problemas):**
+- `CosteoService` es una única implementación (`Scoped` en DI), usada
+  idénticamente por `VarianteDetalle.razor` y por
+  `VarianteConPackagingYServiciosIntegrationTests`. `GetVarianteParaCosteoAsync`
+  trae exactamente el grafo que el servicio necesita.
+- Ingredientes (con merma y overrides), packaging, mano de obra (3
+  componentes de tiempo) y servicios (por hora/por lote, de receta y de
+  variante) se calculan y suman correctamente.
+- `VarianteDetalle.CalcularAsync` aplica bien el patrón override-o-default
+  de `ConfiguracionGlobal` para estrategia, margen, multiplicador y redondeo.
+- Barrido completo de `Medialuncita.UI/Components`: ninguna pantalla con
+  `InputText`/`InputNumber`/`InputSelect`/`InputDate` fuera de un `EditForm`,
+  y ningún `@bind-Value` a un indexador de diccionario/lista. Los dos bugs
+  del commit anterior no se reintrodujeron en ninguna pantalla (se revisaron
+  las 19 pantallas de `Medialuncita.UI`, incluyendo `ServicioEditar`,
+  `MaterialEditar`, `UnidadEditar` y `RecetaDetalle`, que faltaban del
+  repaso anterior).
+- Interfaces de `Abstractions/IRepositories.cs` cruzadas contra sus
+  implementaciones concretas en `Infrastructure/Repositories/*.cs`: firmas
+  coinciden, sin métodos faltantes.
+- `MedialuncitaDbContext.OnModelCreating` consistente con las relaciones que
+  usa `CosteoService`/`GetVarianteParaCosteoAsync`.
+
+**Problema concreto encontrado y corregido:**
+- `Medialuncita.MAUI/Components/Layout/NavMenu.razor` tenía dos `NavLink`
+  muertos (`counter`, `weather`) apuntando a páginas de ejemplo que ya se
+  habían borrado en el commit "Se quitan pantallas de ejemplo innecesarias".
+  Clickearlos llevaba a `NotFoundPage`. Se quitaron esas dos entradas; el
+  resto del menú (Unidades, Ingredientes, Materiales, Recetas, Productos,
+  Servicios, Configuración) ya estaba completo y correcto.
+
 ## Bugs ya resueltos (no reintroducir)
 
 - **Los componentes `InputText`/`InputNumber`/`InputSelect` de Blazor SIEMPRE deben
