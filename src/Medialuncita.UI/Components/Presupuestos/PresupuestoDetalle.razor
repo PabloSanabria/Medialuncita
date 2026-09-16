@@ -1,0 +1,48 @@
+@page "/presupuestos/{Id:int}"
+@inject IPresupuestoRepository PresupuestoRepo
+
+<h3>Presupuesto</h3>
+
+@if (_presupuesto is null)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <p><strong>Fecha:</strong> @_presupuesto.Fecha.ToString("dd/MM/yyyy")</p>
+    <p><strong>Cliente:</strong> @(string.IsNullOrWhiteSpace(_presupuesto.ClienteNombre) ? "-" : _presupuesto.ClienteNombre)</p>
+    @if (!string.IsNullOrWhiteSpace(_presupuesto.Notas))
+    {
+        <p><strong>Notas:</strong> @_presupuesto.Notas</p>
+    }
+
+    <table>
+        <thead><tr><th>Producto</th><th>Variante</th><th>Cantidad</th><th>Precio unitario</th><th>Subtotal</th></tr></thead>
+        <tbody>
+            @foreach (var item in _presupuesto.Items)
+            {
+                <tr>
+                    <td>@item.NombreProductoSnapshot</td>
+                    <td>@item.NombreVarianteSnapshot</td>
+                    <td>@item.Cantidad</td>
+                    <td>$@item.PrecioUnitarioAlMomento.ToString("0.##")</td>
+                    <td>$@item.Subtotal.ToString("0.##")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <p><strong>Total: $@_presupuesto.Total.ToString("0.##")</strong></p>
+
+    <p><em>Estos valores quedaron congelados al momento de generar el presupuesto:
+    no cambian aunque después se actualicen precios, recetas o variantes.</em></p>
+}
+
+<p><a href="/presupuestos">Volver a presupuestos</a></p>
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private Presupuesto? _presupuesto;
+
+    protected override async Task OnParametersSetAsync() => _presupuesto = await PresupuestoRepo.GetByIdAsync(Id);
+}

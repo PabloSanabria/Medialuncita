@@ -1,0 +1,262 @@
+@page "/presupuestos"
+@using Medialuncita.Application.Presupuestos
+@inject IProductoRepository ProductoRepo
+@inject IPresupuestoRepository PresupuestoRepo
+@inject IPresupuestoService PresupuestoService
+@inject IConfiguracionGlobalRepository ConfigRepo
+@inject IPrecioConsultaService PrecioService
+@inject ICosteoService CosteoService
+@inject NavigationManager Nav
+
+<h3>Presupuestos</h3>
+
+<table>
+    <thead><tr><th>Fecha</th><th>Cliente</th><th>Ítems</th><th>Total</th><th></th></tr></thead>
+    <tbody>
+        @if (_presupuestos is null) { <tr><td colspan="5">Cargando...</td></tr> }
+        else if (_presupuestos.Count == 0) { <tr><td colspan="5">Todavía no hay presupuestos guardados.</td></tr> }
+        else
+        {
+            @foreach (var presupuesto in _presupuestos)
+            {
+                <tr>
+                    <td>@presupuesto.Fecha.ToString("dd/MM/yyyy")</td>
+                    <td>@(string.IsNullOrWhiteSpace(presupuesto.ClienteNombre) ? "-" : presupuesto.ClienteNombre)</td>
+                    <td>@presupuesto.Items.Count</td>
+                    <td>$@presupuesto.Total.ToString("0.##")</td>
+                    <td><a href="@($"/presupuestos/{presupuesto.Id}")">Ver detalle</a></td>
+                </tr>
+            }
+        }
+    </tbody>
+</table>
+
+<hr />
+
+<h4>Nuevo presupuesto</h4>
+
+@if (_productos is null)
+{
+    <p>Cargando productos...</p>
+}
+else if (_productos.Count == 0)
+{
+    <p><em>Todavía no hay productos con variantes cargados. Primero creá un producto y al menos una variante.</em></p>
+}
+else
+{
+    <EditForm Model="this">
+        <div><label>Cliente (opcional)</label><InputText @bind-Value="_clienteNombre" /></div>
+        <div><label>Notas (opcional)</label><InputTextArea @bind-Value="_notas" /></div>
+    </EditForm>
+
+    <h5>Agregar ítem</h5>
+    <EditForm Model="this">
+        <div>
+            <label>Producto</label>
+            <InputSelect @bind-Value="_productoSeleccionadoId">
+                <option value="0">-- Seleccionar --</option>
+                @foreach (var p in _productos.Where(p => p.Variantes.Count > 0))
+                {
+                    <option value="@p.Id">@p.Nombre</option>
+                }
+            </InputSelect>
+        </div>
+        <div>
+            <label>Variante</label>
+            <InputSelect @bind-Value="_varianteSeleccionadaId">
+                <option value="0">-- Seleccionar --</option>
+                @foreach (var v in VariantesDelProductoSeleccionado)
+                {
+                    <option value="@v.Id">@v.Nombre</option>
+                }
+            </InputSelect>
+        </div>
+        <div>
+            <label>Cantidad</label>
+            <InputNumber @bind-Value="_cantidadItem" />
+        </div>
+        @if (!string.IsNullOrEmpty(_errorItem)) { <p style="color:red">@_errorItem</p> }
+        <button type="button" @onclick="AgregarItemAsync">Agregar ítem</button>
+    </EditForm>
+
+    <h5>Ítems del presupuesto</h5>
+    <table>
+        <thead><tr><th>Producto</th><th>Variante</th><th>Cantidad</th><th>Precio unitario</th><th>Subtotal</th><th></th></tr></thead>
+        <tbody>
+            @if (_itemsStaging.Count == 0)
+            {
+                <tr><td colspan="6"><em>Todavía no agregaste ítems.</em></td></tr>
+            }
+            else
+            {
+                @foreach (var item in _itemsStaging)
+                {
+                    <tr>
+                        <td>@item.ProductoNombre</td>
+                        <td>@item.VarianteNombre</td>
+                        <td>@item.Cantidad</td>
+                        <td>$@item.PrecioUnitario.ToString("0.##")</td>
+                        <td>$@item.Subtotal.ToString("0.##")</td>
+                        <td><button type="button" @onclick="() => QuitarItemStaging(item)">Quitar</button></td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+
+    <p><strong>Total: $@_itemsStaging.Sum(i => i.Subtotal).ToString("0.##")</strong></p>
+
+    @if (!string.IsNullOrEmpty(_errorGuardar)) { <p style="color:red">@_errorGuardar</p> }
+
+    <button type="button" @onclick="GuardarPresupuestoAsync">Guardar presupuesto</button>
+}
+
+@code {
+    private List<Producto>? _productos;
+    private List<Presupuesto>? _presupuestos;
+
+    private string? _clienteNombre;
+    private string? _notas;
+
+    private int _productoSeleccionadoId;
+    private int _varianteSeleccionadaId;
+    private decimal _cantidadItem;
+    private string? _errorItem;
+    private string? _errorGuardar;
+
+    private readonly List<ItemStaging> _itemsStaging = new();
+
+    private IEnumerable<ProductoVariante> VariantesDelProductoSeleccionado =>
+        _productos?.FirstOrDefault(p => p.Id == _productoSeleccionadoId)?.Variantes ?? Enumerable.Empty<ProductoVariante>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _productos = await ProductoRepo.GetAllActivosAsync();
+        await CargarPresupuestosAsync();
+    }
+
+    private async Task CargarPresupuestosAsync() => _presupuestos = await PresupuestoRepo.GetAllAsync();
+
+    private async Task AgregarItemAsync()
+    {
+        _errorItem = null;
+
+        if (_productoSeleccionadoId <= 0) { _errorItem = "Elegí un producto."; return; }
+        if (_varianteSeleccionadaId <= 0) { _errorItem = "Elegí una variante."; return; }
+        if (_cantidadItem <= 0) { _errorItem = "La cantidad debe ser mayor a cero."; return; }
+
+        var producto = _productos!.First(p => p.Id == _productoSeleccionadoId);
+        var variante = producto.Variantes.FirstOrDefault(v => v.Id == _varianteSeleccionadaId);
+        if (variante is null) { _errorItem = "La variante elegida no pertenece al producto seleccionado."; return; }
+
+        try
+        {
+            var precioUnitario = await CalcularPrecioUnitarioAsync(variante.Id);
+            _itemsStaging.Add(new ItemStaging
+            {
+                ProductoVarianteId = variante.Id,
+                ProductoNombre = producto.Nombre,
+                VarianteNombre = variante.Nombre,
+                Cantidad = _cantidadItem,
+                PrecioUnitario = precioUnitario,
+                Subtotal = precioUnitario * _cantidadItem
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _errorItem = ex.Message;
+            return;
+        }
+
+        _productoSeleccionadoId = 0;
+        _varianteSeleccionadaId = 0;
+        _cantidadItem = 0;
+    }
+
+    /// <summary>
+    /// Calcula el precio de venta unitario vigente de una variante reutilizando
+    /// CosteoService (el mismo motor que usa VarianteDetalle y PresupuestoService),
+    /// solo para mostrar una previsualización ANTES de confirmar el presupuesto.
+    /// El guardado real (GenerarPresupuestoAsync) vuelve a calcular y es la única
+    /// fuente de verdad de lo que se congela en el snapshot.
+    /// </summary>
+    private async Task<decimal> CalcularPrecioUnitarioAsync(int varianteId)
+    {
+        var variante = await ProductoRepo.GetVarianteParaCosteoAsync(varianteId)
+            ?? throw new InvalidOperationException("No se encontró la variante seleccionada.");
+        var receta = variante.Producto?.Receta
+            ?? throw new InvalidOperationException("La variante no tiene receta madre cargada.");
+
+        var idsIngredientes = receta.Ingredientes.Select(ri => ri.IngredienteId)
+            .Concat(variante.IngredienteOverrides.Select(o => o.IngredienteId))
+            .Distinct();
+
+        var preciosIngredientes = new Dictionary<int, decimal>();
+        foreach (var id in idsIngredientes)
+            preciosIngredientes[id] = await PrecioService.GetPrecioVigenteIngredienteAsync(id);
+
+        var preciosMateriales = new Dictionary<int, decimal>();
+        foreach (var id in variante.Materiales.Select(m => m.MaterialId).Distinct())
+            preciosMateriales[id] = await PrecioService.GetPrecioVigenteMaterialAsync(id);
+
+        var config = await ConfigRepo.GetAsync();
+
+        var resultadoCosteo = CosteoService.CalcularCosto(
+            receta, variante, preciosIngredientes, preciosMateriales, config.TarifaManoDeObraPorHora);
+
+        var estrategia = variante.EstrategiaPrecioOverride ?? config.EstrategiaPrecioDefault;
+        var margen = variante.MargenPorcentualOverride ?? config.MargenPorcentualDefault;
+        var multiplicador = variante.MultiplicadorOverride ?? config.MultiplicadorDefault;
+        var redondeo = variante.EstrategiaRedondeoOverride ?? config.EstrategiaRedondeoDefault;
+
+        var resultadoPrecio = CosteoService.CalcularPrecioVenta(
+            resultadoCosteo.CostoUnitario, estrategia, margen, multiplicador, variante.PrecioManualOverride, redondeo);
+
+        return resultadoPrecio.PrecioUnitarioFinal;
+    }
+
+    private void QuitarItemStaging(ItemStaging item) => _itemsStaging.Remove(item);
+
+    private async Task GuardarPresupuestoAsync()
+    {
+        _errorGuardar = null;
+
+        if (_itemsStaging.Count == 0)
+        {
+            _errorGuardar = "Agregá al menos un ítem antes de guardar el presupuesto.";
+            return;
+        }
+
+        try
+        {
+            var items = _itemsStaging
+                .Select(i => new ItemPresupuestoRequest(i.ProductoVarianteId, i.Cantidad))
+                .ToList();
+
+            var id = await PresupuestoService.GenerarPresupuestoAsync(
+                items,
+                string.IsNullOrWhiteSpace(_clienteNombre) ? null : _clienteNombre.Trim(),
+                string.IsNullOrWhiteSpace(_notas) ? null : _notas.Trim(),
+                DateTime.Now);
+
+            Nav.NavigateTo($"/presupuestos/{id}");
+        }
+        catch (Exception ex)
+        {
+            _errorGuardar = $"No se pudo guardar el presupuesto: {ex.Message}";
+        }
+    }
+
+    /// <summary>Ítem "en borrador" antes de confirmar el presupuesto. No es una entidad
+    /// de dominio: es solo el estado de la pantalla mientras se arma la lista de ítems.</summary>
+    private class ItemStaging
+    {
+        public int ProductoVarianteId { get; set; }
+        public string ProductoNombre { get; set; } = string.Empty;
+        public string VarianteNombre { get; set; } = string.Empty;
+        public decimal Cantidad { get; set; }
+        public decimal PrecioUnitario { get; set; }
+        public decimal Subtotal { get; set; }
+    }
+}
