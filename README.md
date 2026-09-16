@@ -26,7 +26,12 @@ La UI de MAUI actualmente permite:
   precio/redondeo por defecto);
 - **calcular el costo y precio de venta detallado de una variante desde la
   pantalla de la variante**, mostrando el desglose de ingredientes, packaging,
-  mano de obra y servicios.
+  mano de obra y servicios;
+- **generar presupuestos (cotizaciones) básicos desde la pantalla
+  "Presupuestos"**: se arma agregando una o más líneas de Producto + Variante
+  + Cantidad, se previsualiza el precio unitario/subtotal con el mismo motor
+  de costeo, y al guardar se congela todo en un snapshot inmutable; también
+  se puede consultar cualquier presupuesto ya guardado.
 
 Cada producto referencia una receta madre. Cada variante define su rendimiento,
 unidad compatible y los tiempos adicionales por lote y por unidad. Al eliminar
@@ -45,16 +50,18 @@ El núcleo ya calcula, de manera determinística:
 6. servicios por hora o por lote;
 7. costo total, costo unitario y precio de venta.
 
-Este cálculo ya es accesible desde la interfaz (pantalla "Detalle de variante"),
-además de usarse internamente en `PresupuestoService`, que congela el resultado
-de un cálculo en un snapshot auditable.
+Este cálculo ya es accesible desde la interfaz, tanto en la pantalla "Detalle
+de variante" (cálculo puntual) como en "Presupuestos" (cálculo + snapshot
+persistente vía `PresupuestoService`, que congela el resultado en un
+snapshot auditable).
 
 ## Próximo alcance del MVP
 
 - Persistencia SQLite real en `Medialuncita.Web` (WASM) — hoy es un placeholder.
 - Agregar el target de Android al `.csproj` de MAUI.
-- Generar presupuestos desde la UI (hoy `PresupuestoService` solo se ejerce
-  desde tests).
+- Exportar presupuestos a PDF (fuera de alcance de esta entrega).
+- Gestión de clientes (fuera de alcance de esta entrega).
+- Editar los `VarianteIngredienteOverride` desde una UI dedicada.
 
 ## Ejecutar
 

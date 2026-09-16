@@ -150,11 +150,47 @@ variante (y por su receta madre) necesitan tener al menos un precio cargado
 en su historial. Si falta alguno, el cálculo muestra qué precio falta en vez
 de arrojar un resultado incompleto.
 
+## Presupuestos
+
+En **Presupuestos** vas a encontrar, arriba, la lista de presupuestos ya
+guardados (fecha, cliente, cantidad de ítems y total), cada uno con un link
+**Ver detalle**.
+
+Más abajo está el formulario para armar uno nuevo:
+
+1. Cargá, si querés, el nombre del cliente y notas (ambos opcionales).
+2. En **Agregar ítem**, elegí un producto, después una de sus variantes, y
+   la cantidad que querés cotizar. Al hacer clic en **Agregar ítem**, la
+   pantalla calcula el precio unitario vigente con el mismo motor de costeo
+   que usa "Detalle de variante" y agrega la línea a la tabla de ítems, con
+   su subtotal.
+3. Podés agregar tantos ítems como necesites (por ejemplo, "12 individuales"
+   + "1 torta de 20 porciones" en el mismo presupuesto) y quitar cualquiera
+   con el botón **Quitar** antes de guardar.
+4. Cuando la lista de ítems está lista, hacé clic en **Guardar presupuesto**.
+   Ahí se recalcula todo una última vez y se congela como snapshot: cada
+   ítem guarda el precio unitario, el subtotal y el detalle completo del
+   costeo (ingredientes, packaging, mano de obra, servicios) tal como
+   estaban en ese momento. Después de guardar, se abre el detalle del
+   presupuesto recién creado.
+
+Para poder agregar un ítem, la variante elegida necesita poder costearse (los
+mismos requisitos que en "Detalle de variante": todos sus ingredientes y
+materiales deben tener un precio vigente cargado). Si falta algo, el error se
+muestra debajo del formulario de agregar ítem.
+
+Un presupuesto guardado **no cambia** aunque después actualices precios,
+edites recetas o borres el producto/variante que le dio origen: los datos que
+ves en su detalle son siempre los del momento en que se generó.
+
+Por ahora, esta primera versión no incluye exportar a PDF ni asociar un
+cliente del catálogo (todavía no hay catálogo de clientes): el campo
+"Cliente" es solo un texto libre.
+
 ## Próximas pantallas
 
-El siguiente objetivo es generar presupuestos (cotizaciones) desde la interfaz
-—hoy el motor que arma esos snapshots solo se usa desde los tests— y agregar
-persistencia real en la versión Web.
+El siguiente objetivo es agregar persistencia real en la versión Web (WASM),
+exportar presupuestos a PDF y, más adelante, un catálogo de clientes.
 
 ## Ayuda ante errores frecuentes
 

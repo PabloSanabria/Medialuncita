@@ -144,17 +144,41 @@ Hecho:
   servicios de receta Y de variante, y override de estrategia de precio al mismo
   tiempo — el mismo camino que usa `VarianteDetalle.razor`.
 
+- UI (`Medialuncita.UI/Components/Presupuestos`) con la primera versión
+  funcional de Presupuestos:
+  - `PresupuestosIndex.razor` (`/presupuestos`): lista los presupuestos
+    guardados (`IPresupuestoRepository.GetAllAsync`) y permite armar uno
+    nuevo agregando ítems (Producto + Variante + Cantidad) a una lista en
+    memoria ("staging", no persistida hasta guardar). Cada ítem se
+    previsualiza calculando su precio unitario con `ICosteoService`
+    (mismo patrón que `VarianteDetalle.CalcularAsync`: trae la variante con
+    `GetVarianteParaCosteoAsync`, resuelve precios vigentes con
+    `IPrecioConsultaService`, aplica `ConfiguracionGlobal`). Al guardar,
+    llama a `IPresupuestoService.GenerarPresupuestoAsync` (que vuelve a
+    calcular todo server-side y es la única fuente de verdad del snapshot)
+    y navega al detalle del presupuesto recién creado.
+  - `PresupuestoDetalle.razor` (`/presupuestos/{Id}`): consulta un
+    presupuesto guardado vía `IPresupuestoRepository.GetByIdAsync` y muestra
+    sus campos `*Snapshot` (producto/variante, cantidad, precio unitario,
+    subtotal, total) — sin volver a costear nada.
+  - Entrada "Presupuestos" agregada a `NavMenu.razor` (MAUI), entre
+    Productos y Configuración.
+  - **No se tocó `CosteoService` ni `PresupuestoService`**: ya traían todo
+    lo necesario (el service ya soportaba múltiples ítems por presupuesto;
+    la UI solo lo expone).
+  - Fuera de alcance de esta entrega (documentado también en el manual de
+    usuario): exportar a PDF, catálogo de clientes, sugerencias por IA.
+
 Falta (= "Próximo alcance del MVP" del README, pendiente de priorizar en cada
 sesión):
-1. Generar presupuestos (cotizaciones) desde la UI — hoy `PresupuestoService`
-   solo se ejerce desde tests, no hay pantalla que llame a
-   `GenerarPresupuestoAsync` ni que liste/muestre presupuestos ya generados
-   (aunque `IPresupuestoRepository.GetAllAsync`/`GetByIdAsync` ya existen).
-2. Persistencia SQLite real en `Medialuncita.Web` (WASM) — hoy es placeholder.
-3. Agregar `TargetFramework` de Android al `.csproj` de MAUI.
-4. Editar los `VarianteIngredienteOverride` desde una UI dedicada (hoy el
+1. Persistencia SQLite real en `Medialuncita.Web` (WASM) — hoy es placeholder.
+2. Agregar `TargetFramework` de Android al `.csproj` de MAUI.
+3. Editar los `VarianteIngredienteOverride` desde una UI dedicada (hoy el
    modelo los soporta y `CosteoService`/`GetVarianteParaCosteoAsync` ya los
    contemplan, pero no hay pantalla para cargarlos).
+4. Exportar presupuestos a PDF (explícitamente fuera de alcance hasta ahora).
+5. Catálogo de clientes (hoy `Presupuesto.ClienteNombre` es solo texto
+   libre; no hay entidad `Cliente`).
 
 ## Entrega de validación y cierre (revisión estática post-MVP)
 
@@ -204,6 +228,41 @@ certificó por ejecución real.
   Clickearlos llevaba a `NotFoundPage`. Se quitaron esas dos entradas; el
   resto del menú (Unidades, Ingredientes, Materiales, Recetas, Productos,
   Servicios, Configuración) ya estaba completo y correcto.
+
+## Entrega: Presupuestos básicos (primera versión funcional)
+
+Objetivo único de la sesión: pantallas de Presupuestos sobre el modelo y
+`PresupuestoService` ya existentes, sin rediseñar dominio ni tocar el motor
+de costeo. Se respetó el scoping acordado (ver checklist de alcance en el
+pedido original de la sesión).
+
+**Revisión previa (antes de escribir código):** se leyó este archivo, la
+entidad `Presupuesto`/`PresupuestoItem` (`Domain/Entities/Presupuesto.cs`),
+`PresupuestoService`, `IPresupuestoRepository`/`PresupuestoRepository`, y el
+test de integración existente (`PresupuestoServiceIntegrationTests`). Todo
+el backend (dominio, servicio, repositorio, DI) ya estaba completo y
+probado; solo faltaba la UI.
+
+**Build/test de esta sesión:** el sandbox de esta sesión **no tiene el SDK
+de .NET instalado** (`dotnet` no existe como comando), a diferencia de la
+sesión anterior donde al menos `Domain` había compilado. No se pudo ejecutar
+ni `dotnet build` ni `dotnet test` de ninguna forma. **Pablo debe compilar y
+correr `dotnet test Medialuncita.sln` en Visual Studio** antes de dar por
+buena esta entrega — la revisión de esta sesión fue 100% por lectura de
+código, cruzando firmas de `ICosteoService`/`IPresupuestoService` y
+propiedades de las entidades (`ProductoVariante`, `VarianteIngredienteOverride`,
+`VarianteMaterial`) contra lo que usan las pantallas nuevas.
+
+**Decisión de diseño de esta entrega:** el cálculo de precio unitario que se
+muestra al agregar un ítem en `PresupuestosIndex.razor` es una
+*previsualización*: duplica (no reutiliza vía llamada directa) los mismos
+pasos que ya hace `PresupuestoService.GenerarPresupuestoAsync` internamente,
+porque ese método es privado en su construcción del snapshot y arma+persiste
+en el mismo paso. Se aceptó esta pequeña duplicación (mismo patrón que ya
+usa `VarianteDetalle.CalcularAsync`) en vez de modificar `PresupuestoService`
+para exponer un modo "solo cotizar sin guardar", que hubiera sido un cambio
+de alcance mayor al pedido. El guardado real siempre vuelve a calcular todo
+del lado del servicio, que es la única fuente de verdad del snapshot.
 
 ## Bugs ya resueltos (no reintroducir)
 
