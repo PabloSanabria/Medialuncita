@@ -7,7 +7,7 @@ offline.
 ## Estado actual
 
 La solución contiene Domain, Application, Infrastructure, UI compartida,
-MAUI, Web WASM y tests. Compila con .NET 10 y la suite automatizada tiene 47
+MAUI, Web WASM y tests. Compila con .NET 10 y la suite automatizada tiene 52
 tests aprobados.
 
 La UI de MAUI actualmente permite:
@@ -31,7 +31,13 @@ La UI de MAUI actualmente permite:
   "Presupuestos"**: se arma agregando una o más líneas de Producto + Variante
   + Cantidad, se previsualiza el precio unitario/subtotal con el mismo motor
   de costeo, y al guardar se congela todo en un snapshot inmutable; también
-  se puede consultar cualquier presupuesto ya guardado.
+  se puede consultar cualquier presupuesto ya guardado;
+- **exportar a PDF cualquier presupuesto ya guardado**, con el botón
+  "Generar PDF" en el detalle del presupuesto. El PDF se arma exclusivamente
+  con el snapshot congelado (`PresupuestoPdfService`, en `Application`): no
+  vuelve a consultar precios ni a recalcular nada, así que siempre coincide
+  con lo que se ve en pantalla. Pagina automáticamente si el presupuesto
+  tiene muchos ítems.
 
 Cada producto referencia una receta madre. Cada variante define su rendimiento,
 unidad compatible y los tiempos adicionales por lote y por unidad. Al eliminar
@@ -59,7 +65,6 @@ snapshot auditable).
 
 - Persistencia SQLite real en `Medialuncita.Web` (WASM) — hoy es un placeholder.
 - Agregar el target de Android al `.csproj` de MAUI.
-- Exportar presupuestos a PDF (fuera de alcance de esta entrega).
 - Gestión de clientes (fuera de alcance de esta entrega).
 - Editar los `VarianteIngredienteOverride` desde una UI dedicada.
 

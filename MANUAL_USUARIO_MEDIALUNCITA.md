@@ -183,14 +183,27 @@ Un presupuesto guardado **no cambia** aunque después actualices precios,
 edites recetas o borres el producto/variante que le dio origen: los datos que
 ves en su detalle son siempre los del momento en que se generó.
 
-Por ahora, esta primera versión no incluye exportar a PDF ni asociar un
-cliente del catálogo (todavía no hay catálogo de clientes): el campo
-"Cliente" es solo un texto libre.
+### Generar el PDF de un presupuesto
+
+Desde el detalle de cualquier presupuesto ya guardado, el botón **Generar
+PDF** arma un PDF con número de presupuesto, fecha, cliente (si lo cargaste),
+la tabla de ítems (producto, variante, cantidad, precio unitario y subtotal)
+y el total, y lo descarga a tu carpeta de Descargas de Windows (el nombre de
+archivo incluye el número de presupuesto y la fecha, por ejemplo
+`Presupuesto_12_20260910.pdf`).
+
+El PDF muestra exactamente los mismos números que ya ves en pantalla: se arma
+a partir del snapshot congelado, nunca vuelve a consultar precios ni a
+recalcular nada. Si el presupuesto tiene muchos ítems, se generan varias
+páginas automáticamente.
+
+Por ahora esta primera versión no asocia un cliente del catálogo (todavía no
+hay catálogo de clientes): el campo "Cliente" es solo un texto libre.
 
 ## Próximas pantallas
 
-El siguiente objetivo es agregar persistencia real en la versión Web (WASM),
-exportar presupuestos a PDF y, más adelante, un catálogo de clientes.
+El siguiente objetivo es agregar persistencia real en la versión Web (WASM)
+y, más adelante, un catálogo de clientes.
 
 ## Ayuda ante errores frecuentes
 

@@ -176,9 +176,11 @@ sesión):
 3. Editar los `VarianteIngredienteOverride` desde una UI dedicada (hoy el
    modelo los soporta y `CosteoService`/`GetVarianteParaCosteoAsync` ya los
    contemplan, pero no hay pantalla para cargarlos).
-4. Exportar presupuestos a PDF (explícitamente fuera de alcance hasta ahora).
-5. Catálogo de clientes (hoy `Presupuesto.ClienteNombre` es solo texto
+4. Catálogo de clientes (hoy `Presupuesto.ClienteNombre` es solo texto
    libre; no hay entidad `Cliente`).
+
+(Exportar presupuestos a PDF: **ya implementado**, ver sección "Entrega:
+PDF de presupuestos" más abajo.)
 
 ## Entrega de validación y cierre (revisión estática post-MVP)
 
@@ -263,6 +265,85 @@ usa `VarianteDetalle.CalcularAsync`) en vez de modificar `PresupuestoService`
 para exponer un modo "solo cotizar sin guardar", que hubiera sido un cambio
 de alcance mayor al pedido. El guardado real siempre vuelve a calcular todo
 del lado del servicio, que es la única fuente de verdad del snapshot.
+
+## Entrega: PDF de presupuestos
+
+Objetivo único de la sesión: exportar a PDF un presupuesto **ya guardado**,
+usando exclusivamente su snapshot. Sin recalcular costos/precios, sin
+cliente/IA/nube/Web nuevos, sin entidades nuevas.
+
+**Revisión previa (antes de escribir código):** se clonó el repo (solo
+lectura) y se revisaron `Presupuesto`/`PresupuestoItem`
+(`Domain/Entities/Presupuesto.cs`), `PresupuestoService` (no se tocó),
+`IPresupuestoRepository`/`PresupuestoRepository` (`GetByIdAsync` ya trae
+todo el grafo necesario vía `Include`) y se buscó infraestructura de PDF
+previa en todo el repo (`find -iname "*pdf*"`): **no existía ninguna**, ni
+carpeta ni paquete NuGet referenciado en ningún `.csproj`. Se implementó
+desde cero.
+
+**Decisión de diseño — generador de PDF sin dependencias NuGet:** en vez de
+agregar una librería de terceros (QuestPDF, PdfSharp, etc.), se escribió un
+escritor de PDF 1.4 minimalista a mano
+(`Medialuncita.Application/Presupuestos/Pdf/MinimalPdfDocument.cs`): objetos
+PDF planos sin comprimir, fuentes estándar Helvetica/Helvetica-Bold (no
+requieren embeber datos de fuente), texto codificado en Latin-1/WinAnsi
+(cubre tildes y ñ). Motivos: (1) el sandbox de Claude no tiene acceso a
+`nuget.org` (ver sección de validación anterior) y no se podía verificar que
+un paquete nuevo resuelva; (2) mantiene el principio de "sin abstracciones
+innecesarias" — para un documento de una sola tabla no hace falta un motor
+de layout completo; (3) cero dependencias nuevas = cero riesgo de romper el
+offline-first. Si en el futuro se necesita un PDF visualmente más rico
+(logo, múltiples estilos, gráficos), ahí sí conviene evaluar una librería
+real — pero para esta entrega alcanza y sobra.
+
+**Dónde vive cada pieza:**
+- `Medialuncita.Application/Presupuestos/Pdf/MinimalPdfDocument.cs`: escritor
+  de PDF genérico (texto posicionado, líneas, paginado A4). No sabe nada de
+  `Presupuesto`.
+- `Medialuncita.Application/Presupuestos/Pdf/IPresupuestoPdfService.cs` +
+  `PresupuestoPdfService.cs`: arma el layout específico del presupuesto
+  (encabezado, tabla de ítems, total, paginación automática si no entran
+  todos los ítems en una página) leyendo **solo** campos `*Snapshot` /
+  `PrecioUnitarioAlMomento` / `Subtotal` / `Total` ya persistidos. No
+  referencia `ICosteoService`, `IPrecioConsultaService` ni ningún
+  repositorio: estructuralmente no puede recalcular nada. Registrado en
+  `Medialuncita.Application/DependencyInjection.cs` como
+  `IPresupuestoPdfService` (`Scoped`, mismo patrón que
+  `IPresupuestoService`).
+- `Medialuncita.UI/Components/Presupuestos/PresupuestoDetalle.razor`: botón
+  "Generar PDF" que llama a `IPresupuestoPdfService.GenerarPdf` sobre el
+  `_presupuesto` que la pantalla ya tiene cargado, convierte el resultado a
+  base64 y dispara la descarga vía JS interop
+  (`medialuncita.descargarArchivo`, definido en
+  `Medialuncita.UI/wwwroot/js/archivos.js`, servido por la RCL como
+  `_content/Medialuncita.UI/js/archivos.js`). El JS crea un `Blob` y simula
+  el click de un `<a download>`; en WebView2 (MAUI/Windows) esto guarda el
+  archivo en la carpeta de Descargas del usuario sin necesitar ningún
+  plugin nativo de file-picker.
+- Referencia al script agregada en `src/Medialuncita.MAUI/wwwroot/index.html`
+  (host real) y también en `src/Medialuncita.Web/wwwroot/index.html` (por
+  consistencia, ya que ambos comparten el mismo `PresupuestoDetalle.razor`
+  de la RCL; el host Web sigue sin persistencia SQLite real, así que la
+  pantalla no es funcional ahí de todas formas).
+
+**Tests agregados** (`tests/Medialuncita.Application.Tests/PresupuestoPdfServiceTests.cs`,
+5 tests, sin mocks — el servicio no tiene dependencias): estructura PDF
+válida (`%PDF-1.4` ... `%%EOF`), que el contenido refleje EXACTAMENTE los
+valores del snapshot (no otros recalculados), presupuesto sin cliente/notas,
+paginación automática con muchos ítems, y escapado correcto de nombres con
+paréntesis/barras.
+
+**Build/test de esta sesión:** igual que en entregas anteriores, el sandbox
+de Claude no tiene el SDK de .NET instalado ni acceso a `nuget.org`. No se
+pudo correr `dotnet build`/`dotnet test`. **Pablo debe compilar y correr
+`dotnet test Medialuncita.sln` en Visual Studio** antes de dar por buena
+esta entrega. La verificación de esta sesión fue por lectura de código y
+por trazar a mano la aritmética de paginación (altura de encabezado vs.
+espacio disponible por página) para confirmar que coincide con los
+desplazamientos verticales realmente dibujados.
+
+**Fuera de alcance de esta entrega (sin cambios):** catálogo de clientes,
+funcionalidad de IA, persistencia Web/PWA, nuevas entidades de dominio.
 
 ## Bugs ya resueltos (no reintroducir)
 

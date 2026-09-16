@@ -1,6 +1,7 @@
 using Medialuncita.Application.Costeo;
 using Medialuncita.Application.Precios;
 using Medialuncita.Application.Presupuestos;
+using Medialuncita.Application.Presupuestos.Pdf;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Medialuncita.Application;
@@ -12,6 +13,7 @@ public static class DependencyInjection
         services.AddScoped<ICosteoService, CosteoService>();
         services.AddScoped<IPrecioConsultaService, PrecioConsultaService>();
         services.AddScoped<IPresupuestoService, PresupuestoService>();
+        services.AddScoped<IPresupuestoPdfService, PresupuestoPdfService>();
         return services;
     }
 }

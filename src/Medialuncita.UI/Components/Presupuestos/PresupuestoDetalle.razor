@@ -1,5 +1,8 @@
 @page "/presupuestos/{Id:int}"
+@using Medialuncita.Application.Presupuestos.Pdf
 @inject IPresupuestoRepository PresupuestoRepo
+@inject IPresupuestoPdfService PresupuestoPdfService
+@inject IJSRuntime JS
 
 <h3>Presupuesto</h3>
 
@@ -36,6 +39,15 @@ else
 
     <p><em>Estos valores quedaron congelados al momento de generar el presupuesto:
     no cambian aunque después se actualicen precios, recetas o variantes.</em></p>
+
+    <button class="btn btn-primary" @onclick="GenerarPdfAsync" disabled="@_generandoPdf">
+        @(_generandoPdf ? "Generando..." : "Generar PDF")
+    </button>
+
+    @if (_errorPdf is not null)
+    {
+        <p class="text-danger">@_errorPdf</p>
+    }
 }
 
 <p><a href="/presupuestos">Volver a presupuestos</a></p>
@@ -43,6 +55,36 @@ else
 @code {
     [Parameter] public int Id { get; set; }
     private Presupuesto? _presupuesto;
+    private bool _generandoPdf;
+    private string? _errorPdf;
 
     protected override async Task OnParametersSetAsync() => _presupuesto = await PresupuestoRepo.GetByIdAsync(Id);
+
+    /// <summary>
+    /// Genera el PDF a partir del presupuesto YA CARGADO (con su snapshot congelado) y
+    /// dispara la descarga en el navegador embebido. No vuelve a leer de la base ni
+    /// recalcula nada: usa el mismo objeto _presupuesto que ya se está mostrando en pantalla.
+    /// </summary>
+    private async Task GenerarPdfAsync()
+    {
+        if (_presupuesto is null) return;
+
+        _errorPdf = null;
+        _generandoPdf = true;
+        try
+        {
+            var bytes = PresupuestoPdfService.GenerarPdf(_presupuesto);
+            var base64 = Convert.ToBase64String(bytes);
+            var nombreArchivo = $"Presupuesto_{_presupuesto.Id}_{_presupuesto.Fecha:yyyyMMdd}.pdf";
+            await JS.InvokeVoidAsync("medialuncita.descargarArchivo", nombreArchivo, base64, "application/pdf");
+        }
+        catch (Exception ex)
+        {
+            _errorPdf = $"No se pudo generar el PDF: {ex.Message}";
+        }
+        finally
+        {
+            _generandoPdf = false;
+        }
+    }
 }
