@@ -3,6 +3,8 @@
 
 using Medialuncita.Application;
 using Medialuncita.Infrastructure;
+using Medialuncita.MAUI.Services;
+using Medialuncita.UI.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -29,6 +31,10 @@ public static class MauiProgram
 
         builder.Services.AddApplication();
         builder.Services.AddInfrastructure(dbPath);
+
+        // Entrega de archivos generados (ej. PDF de presupuestos) vía share sheet nativo.
+        // Ver comentario en ArchivoDescargaServiceMaui sobre por qué no se usa JS interop acá.
+        builder.Services.AddTransient<IArchivoDescargaService, ArchivoDescargaServiceMaui>();
 
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();

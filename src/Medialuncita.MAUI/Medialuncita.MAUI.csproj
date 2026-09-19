@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
 
     <PropertyGroup>
-        <TargetFrameworks>net10.0-windows10.0.19041.0</TargetFrameworks>
+        <TargetFrameworks>net10.0-windows10.0.19041.0;net10.0-android</TargetFrameworks>
         <!-- Suppress NuGet warnings for transitive dependency vulnerabilities in EntityFrameworkCore.Sqlite -->
         <NoWarn>$(NoWarn);NU1903</NoWarn>
 
@@ -48,6 +48,31 @@
         <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
     </PropertyGroup>
 
+    <!-- Configuración específica de Android. -->
+    <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+        <!-- Arquitecturas reales de dispositivos actuales; se excluyen x86/x64 (solo emuladores)
+             para no inflar el tamaño del APK sin necesidad. -->
+        <RuntimeIdentifiers Condition="'$(Configuration)' == 'Release'">android-arm64;android-arm</RuntimeIdentifiers>
+<RuntimeIdentifiers Condition="'$(Configuration)' != 'Release'">android-arm64;android-arm;android-x64</RuntimeIdentifiers>
+
+        <!-- Genera un .apk instalable directamente (sideload), no un .aab de Play Store
+             (Google Play está explícitamente fuera de alcance). -->
+        <AndroidPackageFormat>apk</AndroidPackageFormat>
+
+        <!-- IMPORTANTE: el TrimMode "Full" (default de Release en Android) recorta por
+             reflexión miembros que EF Core necesita en runtime para armar el modelo y
+             ejecutar migraciones (Microsoft.Data.Sqlite/SQLitePCLRaw incluidos), y puede
+             romper la app en el dispositivo aunque compile sin errores. "Partial" solo
+             recorta ensamblados del framework marcados [Trimmable] y deja intactos
+             EF Core, Sqlite y el código propio. Ver CLAUDE.md, sección Android. -->
+        <TrimMode>Partial</TrimMode>
+
+        <!-- Firma ad-hoc automática (keystore de debug) también en Release: alcanza para
+             generar un .apk instalable por fuera de Play Store. Ver instrucciones de
+             publicación en el README. -->
+        <AndroidKeyStore Condition="'$(Configuration)' == 'Release'">false</AndroidKeyStore>
+    </PropertyGroup>
+
     <ItemGroup>
         <!-- App Icon -->
         <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
@@ -70,6 +95,7 @@
         <PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
         <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="$(MauiVersion)" />
         <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
+        <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3.v110" Version="1.1.14" />
     </ItemGroup>
     <ItemGroup>
         <ProjectReference Include="..\Medialuncita.UI\Medialuncita.UI.csproj" />

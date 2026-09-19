@@ -1,8 +1,9 @@
 @page "/presupuestos/{Id:int}"
 @using Medialuncita.Application.Presupuestos.Pdf
+@using Medialuncita.UI.Services
 @inject IPresupuestoRepository PresupuestoRepo
 @inject IPresupuestoPdfService PresupuestoPdfService
-@inject IJSRuntime JS
+@inject IArchivoDescargaService ArchivoDescargaService
 
 <h3>Presupuesto</h3>
 
@@ -61,9 +62,11 @@ else
     protected override async Task OnParametersSetAsync() => _presupuesto = await PresupuestoRepo.GetByIdAsync(Id);
 
     /// <summary>
-    /// Genera el PDF a partir del presupuesto YA CARGADO (con su snapshot congelado) y
-    /// dispara la descarga en el navegador embebido. No vuelve a leer de la base ni
-    /// recalcula nada: usa el mismo objeto _presupuesto que ya se está mostrando en pantalla.
+    /// Genera el PDF a partir del presupuesto YA CARGADO (con su snapshot congelado) y se
+    /// lo entrega al usuario a través de IArchivoDescargaService (cada host resuelve cómo:
+    /// share sheet nativo en MAUI, descarga de navegador en Web). No vuelve a leer de la
+    /// base ni recalcula nada: usa el mismo objeto _presupuesto que ya se está mostrando
+    /// en pantalla.
     /// </summary>
     private async Task GenerarPdfAsync()
     {
@@ -74,9 +77,8 @@ else
         try
         {
             var bytes = PresupuestoPdfService.GenerarPdf(_presupuesto);
-            var base64 = Convert.ToBase64String(bytes);
             var nombreArchivo = $"Presupuesto_{_presupuesto.Id}_{_presupuesto.Fecha:yyyyMMdd}.pdf";
-            await JS.InvokeVoidAsync("medialuncita.descargarArchivo", nombreArchivo, base64, "application/pdf");
+            await ArchivoDescargaService.DescargarAsync(nombreArchivo, bytes, "application/pdf");
         }
         catch (Exception ex)
         {

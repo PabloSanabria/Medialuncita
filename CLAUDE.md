@@ -172,15 +172,18 @@ Hecho:
 Falta (= "Próximo alcance del MVP" del README, pendiente de priorizar en cada
 sesión):
 1. Persistencia SQLite real en `Medialuncita.Web` (WASM) — hoy es placeholder.
-2. Agregar `TargetFramework` de Android al `.csproj` de MAUI.
-3. Editar los `VarianteIngredienteOverride` desde una UI dedicada (hoy el
+2. Editar los `VarianteIngredienteOverride` desde una UI dedicada (hoy el
    modelo los soporta y `CosteoService`/`GetVarianteParaCosteoAsync` ya los
    contemplan, pero no hay pantalla para cargarlos).
-4. Catálogo de clientes (hoy `Presupuesto.ClienteNombre` es solo texto
+3. Catálogo de clientes (hoy `Presupuesto.ClienteNombre` es solo texto
    libre; no hay entidad `Cliente`).
+4. Publicación en Google Play (fuera de alcance actual; el target Android
+   hoy solo produce un `.apk` para sideload, ver sección "Entrega: target
+   Android" más abajo).
 
 (Exportar presupuestos a PDF: **ya implementado**, ver sección "Entrega:
-PDF de presupuestos" más abajo.)
+PDF de presupuestos" más abajo. Target Android: **ya agregado**, ver sección
+"Entrega: target Android" más abajo.)
 
 ## Entrega de validación y cierre (revisión estática post-MVP)
 
@@ -312,19 +315,11 @@ real — pero para esta entrega alcanza y sobra.
   `IPresupuestoService`).
 - `Medialuncita.UI/Components/Presupuestos/PresupuestoDetalle.razor`: botón
   "Generar PDF" que llama a `IPresupuestoPdfService.GenerarPdf` sobre el
-  `_presupuesto` que la pantalla ya tiene cargado, convierte el resultado a
-  base64 y dispara la descarga vía JS interop
-  (`medialuncita.descargarArchivo`, definido en
-  `Medialuncita.UI/wwwroot/js/archivos.js`, servido por la RCL como
-  `_content/Medialuncita.UI/js/archivos.js`). El JS crea un `Blob` y simula
-  el click de un `<a download>`; en WebView2 (MAUI/Windows) esto guarda el
-  archivo en la carpeta de Descargas del usuario sin necesitar ningún
-  plugin nativo de file-picker.
-- Referencia al script agregada en `src/Medialuncita.MAUI/wwwroot/index.html`
-  (host real) y también en `src/Medialuncita.Web/wwwroot/index.html` (por
-  consistencia, ya que ambos comparten el mismo `PresupuestoDetalle.razor`
-  de la RCL; el host Web sigue sin persistencia SQLite real, así que la
-  pantalla no es funcional ahí de todas formas).
+  `_presupuesto` que la pantalla ya tiene cargado y entrega los bytes vía
+  `IArchivoDescargaService.DescargarAsync` (interfaz agregada en la entrega
+  de target Android, ver sección "Entrega: target Android" más abajo — en
+  esa sección está la implementación actual del mecanismo de entrega, que
+  reemplazó al JS interop directo que había acá originalmente).
 
 **Tests agregados** (`tests/Medialuncita.Application.Tests/PresupuestoPdfServiceTests.cs`,
 5 tests, sin mocks — el servicio no tiene dependencias): estructura PDF
@@ -344,6 +339,128 @@ desplazamientos verticales realmente dibujados.
 
 **Fuera de alcance de esta entrega (sin cambios):** catálogo de clientes,
 funcionalidad de IA, persistencia Web/PWA, nuevas entidades de dominio.
+
+## Entrega: target Android
+
+Objetivo único de la sesión: agregar el target Android al proyecto MAUI y
+dejar preparado todo lo necesario para generar un `.apk` Release instalable
+por sideload. Sin clientes, sin SQLite en Web/WASM, sin
+`VarianteIngredienteOverride`, sin IA, sin nube, sin Google Play, sin
+funcionalidad nueva.
+
+**Revisión previa (antes de escribir código):** se clonó el repo (solo
+lectura) y se revisó `Medialuncita.MAUI.csproj` (target único
+`net10.0-windows10.0.19041.0`, pero con los `Condition` de
+`SupportedOSPlatformVersion` para `android`/`ios`/`maccatalyst` ya
+preparados por el scaffold original de `dotnet new maui-blazor` y sin usar),
+`MauiProgram.cs` (ya usa `FileSystem.AppDataDirectory` para la ruta de la
+base SQLite — portable sin cambios entre Windows/Android) y
+`Platforms/Android/*` (`MainActivity.cs`, `MainApplication.cs`,
+`AndroidManifest.xml` — ya generados por el scaffold, nunca compilados
+porque Android no estaba en `TargetFrameworks`). No se encontró código
+Windows-específico (`OSVersion`, `RuntimeInformation`, rutas con `C:\`,
+`Microsoft.Win32`, etc.) en Domain/Application/Infrastructure/UI que pudiera
+romper en Android.
+
+**Cambios de configuración (`Medialuncita.MAUI.csproj`):**
+- `net10.0-android` agregado a `<TargetFrameworks>` (queda
+  multi-target junto con Windows).
+- `RuntimeIdentifiers` = `android-arm64;android-arm` (dispositivos reales;
+  se excluyen `x86`/`x64`, que solo existen como emuladores, para no inflar
+  el APK).
+- `AndroidPackageFormat` = `apk` explícito (no `aab` de Play Store, que está
+  fuera de alcance).
+- `TrimMode` = `Partial` para Android. **Esto es el problema concreto más
+  importante que se previno en esta entrega:** el default de Release en
+  Android es `TrimMode=Full`, que recorta por reflexión miembros que EF Core
+  necesita para armar su modelo y ejecutar migraciones en runtime. Con
+  `Full` la app puede compilar y empaquetar sin errores y aun así fallar o
+  crashear al abrir la pantalla que toca la base de datos en el dispositivo
+  real. `Partial` solo recorta ensamblados del framework marcados
+  `[Trimmable]` y deja intactos EF Core/Sqlite y el código propio.
+- `AndroidKeyStore=false` en Release: habilita la firma ad-hoc automática
+  (keystore de debug autogenerado) también en builds Release, suficiente
+  para un `.apk` instalable fuera de Play Store sin que Pablo tenga que
+  crear y gestionar un keystore propio.
+
+**Problema concreto encontrado y corregido — descarga del PDF no funciona en
+el WebView de Android:** el mecanismo existente
+(`medialuncita.descargarArchivo` en `archivos.js`, un `Blob` +
+`<a download>` simulado por click) funciona en Windows porque WebView2
+delega la descarga en el shell de Windows, pero el WebView del sistema en
+Android no tiene ningún gestor de descargas enganchado por default: el click
+se ejecuta pero no pasa nada, sin error visible — el botón "Generar PDF"
+hubiera parecido funcionar sin producir ningún archivo accesible para el
+usuario. Se resolvió con una abstracción por host, sin cambiar la lógica de
+generación del PDF (`PresupuestoPdfService` no se tocó):
+- `Medialuncita.UI/Services/IArchivoDescargaService.cs` (interfaz nueva,
+  `DescargarAsync(nombreArchivo, contenido, tipoMime)`).
+  `PresupuestoDetalle.razor` ahora inyecta esta interfaz en vez de
+  `IJSRuntime` directamente.
+- `Medialuncita.MAUI/Services/ArchivoDescargaServiceMaui.cs`: implementación
+  única para Windows **y** Android (sin `#if` ni carpetas `Platforms/*`):
+  escribe el archivo en `FileSystem.CacheDirectory` y dispara
+  `Share.Default.RequestAsync` (share sheet nativo de MAUI Essentials, ya
+  incluido en `Microsoft.Maui.Controls`, sin paquetes NuGet nuevos). En
+  Android esto abre el selector nativo de "Guardar en Archivos / compartir
+  por WhatsApp, Drive, etc."; en Windows abre el diálogo equivalente.
+  Registrada en `MauiProgram.cs` (`AddTransient`).
+- `Medialuncita.Web/Services/ArchivoDescargaServiceWeb.cs`: implementación
+  para Web que reutiliza el JS existente sin modificarlo (en un navegador
+  real el patrón Blob+`<a download>` sí funciona). Registrada en
+  `Medialuncita.Web/Program.cs` (`AddScoped`) por paridad, aunque el host
+  Web sigue sin SQLite real y la pantalla de Presupuestos no es funcional
+  ahí de todas formas.
+- `archivos.js` y su referencia en `index.html` de MAUI se dejaron
+  intactos (sin uso desde MAUI ahora, pero removerlos no aportaba nada y
+  sumaba riesgo innecesario a la entrega).
+
+**Riesgo identificado y documentado, no resuelto en esta entrega —
+`SQLitePCLRaw` en Android:** `Microsoft.EntityFrameworkCore.Sqlite` trae
+transitivamente `SQLitePCLRaw.bundle_e_sqlite3`, que incluye los binarios
+nativos de SQLite para Android. En la gran mayoría de apps MAUI esto se
+resuelve solo (la selección de binario nativo la hace NuGet contra el
+`TargetFramework`/RID final del proyecto ejecutable, no contra el proyecto
+`Infrastructure` que lo referencia). No se agregó una referencia explícita a
+`SQLitePCLRaw.bundle_e_sqlite3` en `Medialuncita.MAUI.csproj` porque el
+sandbox de esta sesión no tiene acceso a `nuget.org` (ver secciones
+anteriores) y fijar una versión sin poder validar que resuelve y es
+compatible con `Microsoft.Data.Sqlite 10.0.0` era más riesgo que beneficio.
+**Si al correr en un dispositivo/emulador Android aparece
+`DllNotFoundException` mencionando `e_sqlite3`**, el fix documentado es
+agregar esa `PackageReference` directamente en `Medialuncita.MAUI.csproj`
+(dejar que VS resuelva la versión compatible automáticamente al agregarla
+desde el NuGet Package Manager).
+
+**Build/test/compilación Android de esta sesión:** el sandbox de Claude no
+tiene el SDK de .NET instalado, no tiene acceso a `nuget.org` y, aunque los
+tuviera, no tiene el workload Android de MAUI (requiere Android SDK/NDK,
+que no está disponible acá). No se pudo ejecutar `dotnet build`,
+`dotnet test` ni compilar el target `net10.0-android` de ninguna forma. La
+verificación de esta entrega fue **100% por lectura de código y
+configuración**, no por build real. **Pablo debe, en Visual Studio 2026 con
+el workload Android instalado:**
+1. Restaurar (`dotnet restore` o simplemente abrir en VS).
+2. `dotnet build Medialuncita.sln` (compilación Windows+tests, sin tocar
+   Android) y `dotnet test Medialuncita.sln`.
+3. Seleccionar el framework `net10.0-android` de `Medialuncita.MAUI` como
+   destino de depuración y confirmar que compila y arranca en un emulador o
+   dispositivo.
+4. Navegar todas las pantallas (catálogos, variante, presupuestos) y
+   confirmar que el flujo de alta/edición y el cálculo de costeo funcionan
+   igual que en Windows.
+5. Probar específicamente "Generar PDF" desde un presupuesto guardado en
+   Android y confirmar que el share sheet nativo aparece y el archivo se
+   puede guardar/abrir.
+6. Publicar en Release (ver README, sección "Android") y confirmar que el
+   `.apk` generado instala y arranca en un dispositivo real.
+Reportar cualquier error de esos pasos para poder corregirlo en la próxima
+entrega.
+
+**Fuera de alcance de esta entrega (sin cambios):** catálogo de clientes,
+`VarianteIngredienteOverride`, IA, nube, publicación en Google Play (el
+`.apk` generado es solo para sideload), cualquier funcionalidad nueva más
+allá de lo necesario para que Android compile y funcione.
 
 ## Bugs ya resueltos (no reintroducir)
 

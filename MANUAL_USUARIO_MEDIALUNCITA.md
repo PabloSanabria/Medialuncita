@@ -188,9 +188,11 @@ ves en su detalle son siempre los del momento en que se generó.
 Desde el detalle de cualquier presupuesto ya guardado, el botón **Generar
 PDF** arma un PDF con número de presupuesto, fecha, cliente (si lo cargaste),
 la tabla de ítems (producto, variante, cantidad, precio unitario y subtotal)
-y el total, y lo descarga a tu carpeta de Descargas de Windows (el nombre de
-archivo incluye el número de presupuesto y la fecha, por ejemplo
-`Presupuesto_12_20260910.pdf`).
+y el total (el nombre de archivo incluye el número de presupuesto y la
+fecha, por ejemplo `Presupuesto_12_20260910.pdf`). Al tocar el botón se abre
+el cuadro nativo de "Guardar o compartir" del sistema: en Windows elegís
+dónde guardarlo, y en Android además podés compartirlo directo por
+WhatsApp, Drive, correo, etc.
 
 El PDF muestra exactamente los mismos números que ya ves en pantalla: se arma
 a partir del snapshot congelado, nunca vuelve a consultar precios ni a
