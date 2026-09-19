@@ -30,6 +30,119 @@ Los precios se registran por la unidad de compra. Por ejemplo, si la harina se
 compra por kilogramo, ingresá el precio de un kilogramo, aunque en la receta la
 uses en gramos.
 
+## Uso en Android
+
+La app se maneja igual en Android que en Windows; la única diferencia es de
+navegación. El menú lateral (Unidades, Ingredientes, Recetas, etc.) se abre
+tocando el ícono de tres rayas (☰) arriba a la derecha de la pantalla. En
+algunos equipos ese ícono puede verse pegado bien arriba, cerca del borde —
+es solo estético, igual responde al toque.
+
+## Ejemplo guiado: costear medialunas de manteca de punta a punta
+
+Esta sección recorre TODAS las pantallas en el orden real en que se usan,
+con un ejemplo numérico completo. La idea es que puedas seguirlo con
+números propios la primera vez que uses la app. **Los montos exactos que te
+muestre la app pueden variar levemente según redondeos internos del motor
+de costeo — lo importante acá es entender el flujo, no reproducir estas
+cifras al centavo.**
+
+### 1. Unidades de medida
+
+Creá (si no existen):
+
+| Nombre     | Abreviatura | Tipo   | Factor a unidad base |
+|------------|-------------|--------|----------------------|
+| Kilogramo  | kg          | Peso   | 1000                 |
+| Unidad     | u           | Unidad | 1                     |
+
+(El factor 1000 en Kilogramo significa que 1 kg = 1000 g; la app trabaja
+internamente en la unidad base — gramos para peso, mililitros para volumen.)
+
+### 2. Ingredientes y precios
+
+Cargá estos cuatro, todos sin merma para simplificar el ejemplo:
+
+| Ingrediente | Unidad de compra | Precio      |
+|-------------|-------------------|-------------|
+| Harina 000  | Kilogramo         | $1.200/kg   |
+| Manteca     | Kilogramo         | $4.000/kg   |
+| Azúcar      | Kilogramo         | $1.000/kg   |
+| Huevo       | Unidad            | $150 c/u    |
+
+Para cada uno, entrá a **Ver precios** y cargá el importe con la fecha de
+hoy.
+
+### 3. Servicios
+
+Cargá un servicio **"Gas horno"** con costo por lote: $300 (dejá vacío el
+costo por hora si no lo vas a usar).
+
+### 4. Configuración global
+
+Cargá:
+- Tarifa de mano de obra: **$3.000/hora**.
+- Estrategia de precio por defecto: **Margen**, valor **40%**.
+- Redondeo por defecto: al **$50** más cercano.
+
+### 5. Receta
+
+Creá la receta **"Medialunas de manteca"**, rendimiento **30 unidades**,
+tiempo de preparación **60 minutos**. Agregá estos ingredientes:
+
+| Ingrediente | Cantidad en la receta | Costo         |
+|-------------|------------------------|---------------|
+| Harina 000  | 1000 g (= 1 kg)        | $1.200        |
+| Manteca     | 300 g (= 0,3 kg)       | $1.200        |
+| Azúcar      | 150 g (= 0,15 kg)      | $150          |
+| Huevo       | 2 unidades             | $300          |
+| **Subtotal ingredientes** |          | **$2.850**    |
+
+Desde la edición de la receta, asociá el servicio **Gas horno** con
+prorrateo **por lote**.
+
+Con esto, el costo del lote completo ya suma: $2.850 (ingredientes) + $300
+(gas) + $3.000 (mano de obra, 60 min = 1 hora × $3.000/hora) = **$6.150**
+para las 30 unidades del lote, es decir **$205 por unidad** antes de
+packaging ni margen.
+
+### 6. Producto
+
+Creá el producto **"Medialuna de manteca"** usando la receta anterior como
+receta madre.
+
+### 7. Variante
+
+Desde **Ver variantes** del producto, creá la variante **"Docena"**:
+rendimiento **12 unidades**, tiempo adicional por lote **10 minutos**
+(armado de la caja). En su pantalla de detalle:
+- **Asignar packaging**: 1 "Caja x12" a $250 (si todavía no existe el
+  material, cargalo antes desde **Materiales**).
+- Dejá la estrategia de precio en "-- Usar valor global --" (hereda el
+  margen 40% y el redondeo a $50 de Configuración).
+- Tocá **Calcular costo y precio de venta**. El desglose muestra algo del
+  estilo: 12 unidades × $205 = $2.460 de ingredientes+gas+mano de obra base,
+  más $500 de mano de obra extra (10 min) y $250 de packaging → costo total
+  de la docena ≈ $3.210, con un precio de venta final (margen 40%,
+  redondeado a $50) de **alrededor de $4.500 la docena**.
+
+### 8. Presupuesto
+
+En **Presupuestos**:
+1. Cargá el cliente, por ejemplo "Panadería La Espiga".
+2. En **Agregar ítem**, elegí producto "Medialuna de manteca", variante
+   "Docena", cantidad 3 (para cotizar 3 docenas). Se agrega la línea con su
+   subtotal (≈ 3 × $4.500 = $13.500).
+3. Agregá más ítems si querés (por ejemplo, otra variante o producto).
+4. **Guardar presupuesto**. Se abre el detalle recién creado, con el
+   snapshot congelado de todo lo calculado.
+
+### 9. PDF
+
+Desde el detalle del presupuesto guardado, tocá **Generar PDF**. Se abre el
+cuadro nativo de "Guardar o compartir" (en Android podés mandarlo directo
+por WhatsApp o guardarlo; en Windows elegís la carpeta).
+
 ## Unidades de medida
 
 Abrí **Unidades** desde el menú lateral. Cada unidad necesita nombre,

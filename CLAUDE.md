@@ -365,9 +365,11 @@ romper en Android.
 **Cambios de configuración (`Medialuncita.MAUI.csproj`):**
 - `net10.0-android` agregado a `<TargetFrameworks>` (queda
   multi-target junto con Windows).
-- `RuntimeIdentifiers` = `android-arm64;android-arm` (dispositivos reales;
-  se excluyen `x86`/`x64`, que solo existen como emuladores, para no inflar
-  el APK).
+- `RuntimeIdentifiers` = `android-arm64;android-arm` en Release (dispositivos
+  reales; se excluyen `x86`/`x64` para no inflar el APK), pero en Debug (y
+  cualquier config que no sea Release) se agrega también `android-x64`, ver
+  bug ya resuelto más abajo ("Emulador Android crashea con SIGABRT
+  apenas arranca").
 - `AndroidPackageFormat` = `apk` explícito (no `aab` de Play Store, que está
   fuera de alcance).
 - `TrimMode` = `Partial` para Android. **Esto es el problema concreto más
@@ -414,6 +416,24 @@ generación del PDF (`PresupuestoPdfService` no se tocó):
 - `archivos.js` y su referencia en `index.html` de MAUI se dejaron
   intactos (sin uso desde MAUI ahora, pero removerlos no aportaba nada y
   sumaba riesgo innecesario a la entrega).
+
+**Problema concreto encontrado y corregido (post-entrega, al probar en el
+emulador) — menú de navegación no responde al tap en Android:** el botón
+de menú (checkbox `.navbar-toggler` en `NavMenu.razor.css`, patrón estándar
+del template) queda posicionado casi pegado al borde superior de la
+pantalla (`top: 0.5rem`). A partir de Android 15 (API 35+, incluye el
+emulador API 36 usado para probar), el sistema fuerza el layout
+"edge-to-edge" en apps nuevas: el contenido se dibuja debajo/detrás de la
+barra de estado, que pasa a interceptar los toques en esa franja superior
+para sus propios gestos — el botón se ve pero el tap nunca le llega a la
+WebView. Se corrigió en
+`Platforms/Android/MainActivity.cs` agregando
+`WindowCompat.SetDecorFitsSystemWindows(Window!, true)` en `OnCreate`
+(API de AndroidX Core, ya disponible transitivamente vía
+`Microsoft.Maui.Controls`, sin paquetes NuGet nuevos): restaura el layout
+clásico donde el sistema reserva su propia franja para la barra de estado
+y no la superpone al contenido. No se tocó ningún `.razor`/CSS — es
+puramente una configuración de la Activity nativa.
 
 **Riesgo identificado y documentado, no resuelto en esta entrega —
 `SQLitePCLRaw` en Android:** `Microsoft.EntityFrameworkCore.Sqlite` trae
@@ -463,6 +483,29 @@ entrega.
 allá de lo necesario para que Android compile y funcione.
 
 ## Bugs ya resueltos (no reintroducir)
+
+- **Menú de navegación (NavMenu) no responde al tap en Android (API 35+):**
+  Android fuerza el layout "edge-to-edge" en apps nuevas y el sistema
+  intercepta los toques en la franja superior de la pantalla (donde queda
+  posicionado el botón de menú, `top: 0.5rem` en `NavMenu.razor.css`). Se
+  corrigió en `Platforms/Android/MainActivity.cs` con
+  `WindowCompat.SetDecorFitsSystemWindows(Window!, true)` en `OnCreate`. No
+  tocar el CSS del NavMenu para "arreglar" esto — el problema es de la
+  Activity nativa, no del layout Razor/CSS.
+
+- **Emulador Android crashea con `SIGABRT` apenas arranca (nunca llega a
+  ejecutar C#, log dice "Fatal signal 6 (SIGABRT)" y VS reporta "Could not
+  get process id"):** causado por limitar `RuntimeIdentifiers` en
+  `Medialuncita.MAUI.csproj` a solo `android-arm64;android-arm` (pensado
+  para dispositivos reales). Los emuladores de Android en Windows corren en
+  `x86_64`, así que quedan sin binarios nativos compatibles y el proceso
+  aborta al cargar las librerías nativas, antes de llegar a `MauiProgram`.
+  Se corrigió condicionando `RuntimeIdentifiers` por `$(Configuration)`:
+  Release mantiene solo `android-arm64;android-arm` (APK liviano para
+  sideload en dispositivos reales), y Debug (o cualquier config que no sea
+  Release) agrega `android-x64` para poder correr en el emulador. Si se
+  agrega otra config custom, revisar que también caiga en la rama que
+  incluye `x64` si se va a usar con emulador.
 
 - **Los componentes `InputText`/`InputNumber`/`InputSelect` de Blazor SIEMPRE deben
   estar dentro de un `<EditForm Model="...">`** (o con `EditContext` provisto).
